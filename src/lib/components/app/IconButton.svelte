@@ -9,6 +9,7 @@
     onclick,
     disabled = false,
     pressed,
+    guide,
     variant = 'ghost',
     size = 'icon'
   }: {
@@ -17,6 +18,7 @@
     onclick: () => void;
     disabled?: boolean;
     pressed?: boolean;
+    guide?: string;
     variant?: 'ghost' | 'outline' | 'default' | 'secondary';
     size?: 'icon' | 'icon-sm' | 'sm';
   } = $props();
@@ -25,7 +27,7 @@
 <Tooltip.Root>
   <Tooltip.Trigger>
     {#snippet child({ props })}
-      <Button {...props} {variant} {size} {onclick} {disabled} aria-label={label} aria-pressed={pressed} class={pressed ? 'text-destructive' : ''}>
+      <Button {...props} data-guide={guide} {variant} {size} {onclick} {disabled} aria-label={label} aria-pressed={pressed} class={pressed ? 'text-destructive' : ''}>
         <Icon class="size-4" />
       </Button>
     {/snippet}

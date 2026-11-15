@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { setContext } from 'svelte';
+  import HelpTip from './HelpTip.svelte';
   import { Plus, Trash2, Volume2 } from '@lucide/svelte';
   import { Button } from '$lib/components/ui/button';
   import { Toggle } from '$lib/components/ui/toggle';
@@ -7,10 +9,12 @@
   import TrackThumb from './TrackThumb.svelte';
   import { song, addTrack, removeTrack, commit, MAX_TRACKS } from '$lib/song.svelte';
 
+  setContext('help-section', 'Track');
   const db = (v: number) => (v <= 0.001 ? '-∞ dB' : `${(20 * Math.log10(v)).toFixed(1)} dB`);
 </script>
 
-<section class="flex gap-3 overflow-x-auto border-t p-3" aria-label="Tracks">
+<section class="flex gap-3 overflow-x-auto border-t p-3" aria-label="Tracks" data-guide="tracks">
+  <div class="self-start pt-1"><HelpTip id="tracks" label="Tracks" /></div>
   {#each song.tracks as track, i (track.id)}
     <div class="bg-card flex w-72 shrink-0 gap-3 rounded-lg border p-3 {i === song.activeTrack ? 'border-primary ring-primary/30 ring-2' : ''}">
       <button class="self-start rounded-md" onclick={() => (song.activeTrack = i)} aria-label="Select {track.name}" aria-pressed={i === song.activeTrack}>

@@ -240,7 +240,7 @@
   });
 </script>
 
-<div bind:this={container} class="bg-background relative min-h-64 min-w-0 flex-1 overflow-hidden rounded-lg border">
+<div bind:this={container} data-guide="grid" class="bg-background relative min-h-64 min-w-0 flex-1 overflow-hidden rounded-lg border">
   <Visualizer />
   <!-- svelte-ignore a11y_no_interactive_element_to_noninteractive_role -->
   <canvas

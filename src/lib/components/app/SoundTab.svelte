@@ -6,6 +6,7 @@
   import FilterGraph from './FilterGraph.svelte';
   import WavetablePreview from './WavetablePreview.svelte';
   import { WAVETABLES } from '$lib/wavetables';
+  import HelpTip from './HelpTip.svelte';
   import { Label } from '$lib/components/ui/label';
   import { activeTrack, applyPreset, commit } from '$lib/song.svelte';
   import { SOUND_PRESETS, type WavetableName } from '$lib/types';
@@ -20,7 +21,10 @@
 
 <div>
   <div class="space-y-1.5 pb-3">
-    <Label class="text-muted-foreground text-xs">Preset for <strong class="text-foreground">{track.name}</strong></Label>
+    <span class="flex items-center gap-1">
+      <Label class="text-muted-foreground text-xs">Preset for <strong class="text-foreground">{track.name}</strong></Label>
+      <HelpTip id="Preset" label="Preset" />
+    </span>
     <Choice label="Preset" class="w-full" value="" options={presets} onchange={applyPreset} />
   </div>
 

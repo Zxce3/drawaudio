@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { ui } from '$lib/song.svelte';
   import * as Tabs from '$lib/components/ui/tabs';
   import { ScrollArea } from '$lib/components/ui/scroll-area';
   import SoundTab from './SoundTab.svelte';
@@ -8,9 +9,9 @@
   import SongTab from './SongTab.svelte';
 </script>
 
-<aside class="bg-card flex min-h-80 w-full flex-col overflow-hidden rounded-lg border lg:w-96 lg:shrink-0" aria-label="Controls">
-  <Tabs.Root value="sequencer" class="flex min-h-0 flex-1 flex-col">
-    <Tabs.List class="mx-2 mt-2 grid h-9 w-[calc(100%-1rem)] grid-cols-5">
+<aside data-guide="panel" class="bg-card flex min-h-80 w-full flex-col overflow-hidden rounded-lg border lg:w-96 lg:shrink-0" aria-label="Controls">
+  <Tabs.Root bind:value={ui.panelTab} class="flex min-h-0 flex-1 flex-col">
+    <Tabs.List data-guide="tabs" class="mx-2 mt-2 grid h-9 w-[calc(100%-1rem)] grid-cols-5">
       <Tabs.Trigger value="sequencer">Seq</Tabs.Trigger>
       <Tabs.Trigger value="sound">Sound</Tabs.Trigger>
       <Tabs.Trigger value="effects">FX</Tabs.Trigger>

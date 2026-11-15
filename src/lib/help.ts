@@ -1,0 +1,124 @@
+/**
+ * Plain-language explanations shown by the "?" buttons and the guided tour.
+ * Keys are either a section title, or "Section/Slider label" for a slider.
+ */
+export const HELP: Record<string, string> = {
+  // ----------------------------------------------------------- top bar
+  'bar/position': 'Where the playhead is, as bar.beat.step, and how long it has been playing. The meter shows the output level.',
+  'bar/gridSize': 'How many columns (time steps) and rows (pitches) the grid has. A bigger grid fits longer songs: 16×16 is one bar, 32×32 two bars, 64×64 four bars. Changing it keeps your notes where they fit. The menu beside it sets beats per bar, which only changes the heavier bar lines in the grid.',
+  'bar/tempo': 'Speed in beats per minute. Drag the slider, tap the Tap button in rhythm, or press - and = on the keyboard.',
+  'bar/scale': 'The notes the rows are allowed to play. Every row is a note of this scale, so melodies stay in key. Use the arrows to flip through scales.',
+  'bar/record': 'Records everything you hear to a WAV file. Press again (or R) to stop and download it.',
+
+  // ------------------------------------------------------------ tracks
+  'tracks': 'Each track is its own instrument with its own notes, sound and mix. Click a track to edit it. M mutes it, S plays only soloed tracks, and the sliders set its volume, stereo position and how much goes to the reverb.',
+  'Track/Volume': 'How loud this track is in the mix.',
+  'Track/Pan': 'Where the track sits between the left and right speakers.',
+  'Track/Reverb': 'How much of this track is sent into the shared reverb. More send sounds farther away.',
+
+  // ---------------------------------------------------- Seq: sections
+  'Waveform': 'The basic shape of the sound. Sine is smooth, triangle is soft, saw is bright and buzzy, square is hollow, pulse is a square with an adjustable width, and WT plays a morphing wavetable (set it up on the Sound tab).',
+  'Playback': 'The order the columns are played. Forward and backward are straightforward, bounce goes back and forth, random jumps around, and columns skips empty columns.',
+  'Note length': 'How long each drawn note is held, from one sixteenth step up to a whole bar. Longer notes overlap the next ones, which suits pads.',
+  'Groove': 'Timing feel. These settings change when and how notes are played, not which notes you drew.',
+  'Humanize': 'Adds small random variations so the playing feels less robotic.',
+  'Arpeggio': 'Plays the notes of a column one after another instead of together, like picking the strings of a chord. Turn it on with the switch.',
+  'Chords': 'Turns every drawn note into a chord built on scale steps above it. Turn it on with the switch.',
+  'Waveform/Pulse width': 'How wide the high part of the pulse wave is. 50% is a square; thin pulses sound nasal and reedy.',
+  'Groove/Swing': 'Delays every second step to make the rhythm shuffle. Off is straight; higher values swing harder.',
+  'Groove/Gate': 'How much of its length each note is held before being released. Low values are short and staccato.',
+  'Groove/Ratchet': 'Repeats each note quickly within its step (×2, ×3, ×4) for rolls and stutters.',
+  'Groove/Glide': 'Slides the pitch smoothly from the previous note to the next, like portamento.',
+  'Humanize/Timing': 'Randomly nudges notes a little early or late.',
+  'Humanize/Velocity': 'Randomly softens some notes so the volume varies.',
+  'Arpeggio/Notes per column': 'How many arpeggio notes are played inside each step. Higher is faster.',
+  'Arpeggio/Octaves': 'How many octaves the arpeggio climbs through.',
+
+  // ------------------------------------------------------------- Sound
+  'Preset': 'Loads a ready-made sound (Pluck, Pad, Bass, Chiptune, Bell, Lead, Noise) into the active track. You can tweak it afterwards.',
+  'Amp envelope': 'The volume shape of every note over time: how fast it fades in (attack), falls to its held level (decay and sustain) and fades out after release.',
+  'Amp envelope/Attack': 'How long a note takes to reach full volume. Short is punchy, long fades in softly.',
+  'Amp envelope/Decay': 'How long the note takes to fall from full volume to the sustain level.',
+  'Amp envelope/Sustain': 'The volume the note holds at while it lasts.',
+  'Amp envelope/Release': 'How long the note keeps ringing after it ends.',
+  'Pitch envelope': 'Makes each note start at a different pitch and glide to the real one. Turn it on with the switch. Good for kicks, zaps and plucks.',
+  'Pitch envelope/Amount': 'How far from the real pitch the note starts, in semitones.',
+  'Pitch envelope/Time': 'How long the pitch takes to settle.',
+  'Wavetable': 'A set of morphing waveforms. Pick the WT waveform on the Seq tab, then choose a table here and move the position to change its character.',
+  'Wavetable/Morph position': 'Slides through the table from its first shape to its last.',
+  'Filter response': 'A picture of how the filters change the sound: lines below the curve are let through, lines above it are reduced.',
+  'Lowpass filter': 'Removes high frequencies to make the sound darker and softer. Turn it on or off with the switch.',
+  'Lowpass filter/Cutoff': 'Frequencies above this are reduced. Lower is darker.',
+  'Lowpass filter/Resonance': 'Boosts the sound right at the cutoff for a more vocal, whistling edge.',
+  'Highpass filter': 'Removes low frequencies to make the sound thinner. Useful for clearing room for the bass.',
+  'Highpass filter/Cutoff': 'Frequencies below this are reduced. Higher is thinner.',
+  'Highpass filter/Resonance': 'Boosts the sound right at the highpass cutoff.',
+  'Filter envelope': 'Sweeps the lowpass filter open at the start of each note and closes it again, for the classic "wow" of synth plucks and basses.',
+  'Filter envelope/Sweep amount': 'How far the filter opens above its cutoff at the start of a note.',
+  'Voices': 'Stack and thicken the oscillator.',
+  'Voices/Unison voices': 'How many slightly detuned copies of the sound play together. More voices sound wider and richer.',
+  'Voices/Unison detune': 'How far apart the unison copies are tuned, in cents.',
+  'Voices/Sub oscillator': 'Adds a sine wave one octave lower for weight.',
+  'Voices/Noise': 'Mixes in noise for breath, hiss and percussive sounds.',
+  'FM': 'Frequency modulation: a second oscillator wobbles the pitch of the first, creating bell, metallic and glassy tones.',
+  'FM/Amount': 'How strongly the modulator bends the pitch. More is brighter and more metallic.',
+  'FM/Ratio': 'The pitch of the modulator relative to the note. Whole numbers sound musical; others sound clangy.',
+
+  // ---------------------------------------------------------------- FX
+  'Reverb': 'Simulates a room or space so sounds seem to exist in it. Choose the space, then set how much you hear. Each track controls how much it sends in.',
+  'Reverb/Mix': 'How loud the reverb is in the final sound.',
+  'Reverb/Decay': 'How long the reverb tail lasts. Lower is a tighter, smaller space.',
+  'Delay': 'Echoes of the sound. Ping Pong bounces left and right, Mono repeats in the middle, Stereo uses two different times, Slapback is one quick echo, Reverse plays echoes backwards, and Pitch Shift changes the pitch of each repeat.',
+  'Delay/Pitch per repeat': 'In Pitch Shift mode, how many semitones each echo moves up or down.',
+  'Delay/Time': 'The gap between echoes. In Reverse mode it is the length of each backwards chunk.',
+  'Delay/Feedback': 'How many repeats you hear. High values ring on for a long time.',
+  'Delay/Mix': 'How loud the echoes are.',
+  'Distortion': 'Adds grit and warmth by overdriving the signal. Turn it on with the switch.',
+  'Distortion/Drive': 'How hard the sound is pushed into distortion.',
+  'Bitcrusher': 'Lo-fi crunch made by throwing away detail: fewer bits make a fuzzy, noisy sound; a lower sample rate makes it metallic and aliased.',
+  'Bitcrusher/Bit depth': 'How many bits describe each sample. 16 is clean; 1-4 is very crunchy.',
+  'Bitcrusher/Sample rate': 'How much of the original sample rate is kept. Lower values sound more metallic.',
+  'Bitcrusher/Mix': 'Blend between the clean and crushed sound.',
+  'Stereo spread': 'Makes the sound wider by adding a slightly delayed copy to one side.',
+  'Stereo spread/Width': 'How wide the stereo image gets.',
+  'Chorus': 'Thickens the sound with a slowly wobbling copy of itself, like several instruments playing together.',
+  'Chorus/Depth': 'How strong the chorus effect is.',
+  'Ring mod': 'Multiplies the sound by a tone, producing bell-like, robotic and metallic overtones.',
+  'Ring mod/Frequency': 'The pitch of the multiplying tone. Low values wobble; high values clang.',
+  'Ring mod/Mix': 'Blend between the normal and ring-modulated sound.',
+  'Sidechain': 'Ducks the whole mix on a steady pulse, like a kick drum pushing the other sounds out of the way. It creates the pumping feel of dance music.',
+  'Sidechain/Amount': 'How far the volume drops on each pulse.',
+  'Sidechain/Release': 'How long the volume takes to recover after each pulse.',
+  'Tape': 'Old tape machine character: slow pitch wobble, soft saturation and hiss.',
+  'Tape/Wow & flutter': 'Slow and fast pitch wobbles of an imperfect tape transport.',
+  'Tape/Saturation': 'Gentle compression and warmth from overloading the tape.',
+  'Tape/Hiss': 'Background tape noise.',
+  'Vinyl': 'Record player character: crackle and a rolled-off top end.',
+  'Vinyl/Crackle': 'The pops and crackles of a dusty record.',
+  'Vinyl/Warmth (high cut)': 'Rolls off the high frequencies for a darker, warmer sound.',
+  'Equalizer': 'A three-band tone control on the final mix: low, mid and high.',
+  'Equalizer/Low': 'Boost or cut the bass.',
+  'Equalizer/Mid': 'Boost or cut the middle of the sound, where most melodies live.',
+  'Equalizer/High': 'Boost or cut the treble.',
+
+  // ------------------------------------------------------------- Tools
+  'Tool': 'Choose whether dragging on the grid draws notes or erases them. Right-click always erases.',
+  'Visualizer': 'Draws the music as moving shapes behind the grid while it plays. Pick a style, or turn it off to save battery.',
+  'Visualizer/Opacity': 'How visible the visualizer is. Keep it low so it never distracts from the notes.',
+  'Pattern generator': 'Fills the active track with a random melody that wanders up and down. Undo brings your old notes back.',
+  'Pattern generator/Density': 'How many columns get a note.',
+  'Transpose': 'Moves every note of the active track up or down one row.',
+  'Shortcuts': 'Keyboard shortcuts for the whole app. Press ? at any time to see them.',
+
+  // -------------------------------------------------------------- Song
+  'Song/name': 'The name used when saving, sharing and exporting.',
+  'Song/save': 'Saves the song in this browser. It also autosaves as you work. Share link copies a web address that contains the whole song.',
+  'Audio': 'Renders one pass of the song, with its reverb and delay tails, to a WAV file. Press R to record anything live instead.',
+  'MIDI': 'Export the song as a MIDI file for other music software, or import a MIDI file to edit it here.',
+  'Example songs': 'Ready-made songs on 16×16, 32×32 and 64×64 grids. Loading one is undoable with Ctrl+Z.',
+  'My songs': 'Songs you saved in this browser.'
+};
+
+export function helpFor(section: string | undefined, label: string): string | undefined {
+  return (section ? HELP[`${section}/${label}`] : undefined) ?? HELP[label];
+}

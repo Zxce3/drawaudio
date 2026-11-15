@@ -5,6 +5,7 @@
   import SidePanel from '$lib/components/app/SidePanel.svelte';
   import TrackStrip from '$lib/components/app/TrackStrip.svelte';
   import Toast from '$lib/components/app/Toast.svelte';
+  import GuideTour from '$lib/components/app/GuideTour.svelte';
   import { song, ui, getEngine, disposeEngine, replaceSong } from '$lib/song.svelte';
   import { handleShortcut } from '$lib/shortcuts';
   import { decodeShare, sanitizeSong, toCompact } from '$lib/storage';
@@ -101,3 +102,4 @@
   <TrackStrip />
 </div>
 <Toast />
+<GuideTour />

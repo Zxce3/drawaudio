@@ -2,6 +2,7 @@
   import { Save, Share2, Download, Upload, Trash2, FolderOpen, Disc3 } from '@lucide/svelte';
   import { Button } from '$lib/components/ui/button';
   import { Input } from '$lib/components/ui/input';
+  import HelpTip from './HelpTip.svelte';
   import { Label } from '$lib/components/ui/label';
   import { onMount } from 'svelte';
   import { song, ui, replaceSong, commit, saveCurrent, exportMidiFile, renderLoop } from '$lib/song.svelte';
@@ -72,7 +73,10 @@
 
 <div class="space-y-6">
   <section class="space-y-2">
-    <Label for="song-name" class="text-sm font-medium">Song name</Label>
+    <div class="flex items-center gap-1.5">
+      <Label for="song-name" class="text-sm font-medium">Song name</Label>
+      <HelpTip id="Song/save" label="Saving and sharing" />
+    </div>
     <Input id="song-name" bind:value={song.name} onchange={commit} maxlength={60} />
     <div class="grid grid-cols-2 gap-2">
       <Button onclick={save} class="gap-2"><Save class="size-4" /> Save</Button>
@@ -81,7 +85,10 @@
   </section>
 
   <section class="space-y-2">
-    <h3 class="text-sm font-medium">Audio</h3>
+    <div class="flex items-center gap-1.5">
+      <h3 class="text-sm font-medium">Audio</h3>
+      <HelpTip id="Audio" label="Audio" />
+    </div>
     <Button variant="outline" class="w-full gap-2" onclick={renderLoop} disabled={ui.rendering || ui.recording}>
       <Disc3 class="size-4" /> {ui.rendering ? 'Rendering…' : 'Render one loop to WAV'}
     </Button>
@@ -89,7 +96,10 @@
   </section>
 
   <section class="space-y-2">
-    <h3 class="text-sm font-medium">MIDI</h3>
+    <div class="flex items-center gap-1.5">
+      <h3 class="text-sm font-medium">MIDI</h3>
+      <HelpTip id="MIDI" label="MIDI" />
+    </div>
     <div class="grid grid-cols-2 gap-2">
       <Button variant="outline" onclick={exportMidiFile} class="gap-2"><Download class="size-4" /> Export</Button>
       <Button variant="outline" onclick={() => fileInput.click()} class="gap-2"><Upload class="size-4" /> Import</Button>
@@ -99,7 +109,10 @@
   </section>
 
   <section class="space-y-2">
-    <h3 class="text-sm font-medium">Example songs</h3>
+    <div class="flex items-center gap-1.5">
+      <h3 class="text-sm font-medium">Example songs</h3>
+      <HelpTip id="Example songs" label="Example songs" />
+    </div>
     {#each [16, 32, 64] as size}
       <h4 class="text-muted-foreground pt-1 text-xs font-medium tracking-wide uppercase">
         {size}×{size} · {size / 16} {size === 16 ? 'bar' : 'bars'}
@@ -122,7 +135,10 @@
   </section>
 
   <section class="space-y-2">
-    <h3 class="text-sm font-medium">My songs</h3>
+    <div class="flex items-center gap-1.5">
+      <h3 class="text-sm font-medium">My songs</h3>
+      <HelpTip id="My songs" label="My songs" />
+    </div>
     {#if songs.length === 0}
       <p class="text-muted-foreground text-sm">Nothing saved yet. Songs are stored in this browser.</p>
     {:else}

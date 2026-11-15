@@ -17,6 +17,7 @@ An interactive audio sequencer where you can create music by drawing patterns on
 - **Transport**: tempo with tap tempo, time signatures, scales with prev/next, playback direction, undo and redo
 - **Tools**: random melody generator and transpose
 - **Recording**: press R to record to WAV, or render one clean loop; plus a bitcrusher effect
+- **Guide and help**: a step-by-step guided tour (Guide button or H) and a `?` explanation next to every control
 - **Shortcuts**: Space, R, D/E, 1-8, M/S, [ ], - =, V, Ctrl+S and more (press ? in the app)
 - **Songs**: autosave, saved songs in the browser, shareable links and MIDI import/export
 - Built with SvelteKit, Svelte 5 runes, Tailwind CSS 4 and shadcn-svelte

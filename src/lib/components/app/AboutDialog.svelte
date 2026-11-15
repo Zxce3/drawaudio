@@ -66,6 +66,7 @@
           <ul class="text-muted-foreground list-disc space-y-1 pl-5">
             <li>Everything runs locally. Nothing you make is uploaded; share links carry the song inside the URL.</li>
             <li>Sound starts on your first click, because browsers block audio until you interact with the page.</li>
+            <li>New here? Press the Guide button (or H) for a step-by-step tour, and click any <strong>?</strong> icon for a plain-language explanation of that control.</li>
             <li>Press R to record what you hear to a WAV file, or render a clean loop from the Song tab.</li>
             <li>The music is drawn behind the grid. Change or turn off the visualizer in the Tools tab.</li>
             <li>The grid is bigger and slower on 64×64; try 16×16 or 32×32 on older phones.</li>

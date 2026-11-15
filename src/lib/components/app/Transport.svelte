@@ -1,11 +1,12 @@
 <script lang="ts">
-  import { Play, Square, Eraser, Undo2, Redo2, ChevronLeft, ChevronRight, Music, Info, Circle } from '@lucide/svelte';
+  import { Play, Square, Eraser, Undo2, Redo2, ChevronLeft, ChevronRight, Music, Info, Circle, BookOpen } from '@lucide/svelte';
   import { Button } from '$lib/components/ui/button';
   import { Slider } from '$lib/components/ui/slider';
   import { Separator } from '$lib/components/ui/separator';
   import Choice from './Choice.svelte';
   import IconButton from './IconButton.svelte';
   import AboutDialog from './AboutDialog.svelte';
+  import HelpTip from './HelpTip.svelte';
   import {
     song, ui, clearTrack, commit, undo, redo, togglePlay, toggleRecording, setGridSize, stepScale, tapTempo, scaleNames, getEngine
   } from '$lib/song.svelte';
@@ -50,7 +51,7 @@
     <span class="text-lg font-semibold tracking-tight">Draw<span class="text-primary">Audio</span></span>
   </div>
 
-  <dl class="bg-card hidden gap-4 rounded-md border px-3 py-1 font-mono text-xs md:flex" aria-label="Playback position">
+  <dl class="bg-card hidden gap-4 rounded-md border px-3 py-1 font-mono text-xs md:flex" aria-label="Playback position" data-guide="position">
     <div><dt class="text-muted-foreground text-[10px] uppercase">Position</dt><dd class="tabular-nums">{position}</dd></div>
     <div><dt class="text-muted-foreground text-[10px] uppercase">Time</dt><dd class="tabular-nums">{time}</dd></div>
     <div><dt class="text-muted-foreground text-[10px] uppercase">Level</dt>
@@ -59,10 +60,10 @@
   </dl>
 
   <div class="flex items-center gap-1">
-    <Button onclick={togglePlay} variant={ui.playing ? 'secondary' : 'default'} class="w-24 gap-2" aria-keyshortcuts="Space">
+    <Button data-guide="play" onclick={togglePlay} variant={ui.playing ? 'secondary' : 'default'} class="w-24 gap-2" aria-keyshortcuts="Space">
       {#if ui.playing}<Square class="size-4" /> Stop{:else}<Play class="size-4" /> Play{/if}
     </Button>
-    <IconButton icon={Circle} label={ui.recording ? 'Stop recording and save WAV (R)' : 'Record to WAV (R)'} onclick={toggleRecording} pressed={ui.recording} disabled={ui.rendering} />
+    <IconButton icon={Circle} label={ui.recording ? 'Stop recording and save WAV (R)' : 'Record to WAV (R)'} onclick={toggleRecording} guide="record" pressed={ui.recording} disabled={ui.rendering} />
     {#if ui.recording}
       <span class="text-destructive font-mono text-xs tabular-nums" role="timer" aria-label="Recording time">● {ui.recordSeconds.toFixed(1)}s</span>
     {/if}
@@ -73,26 +74,32 @@
 
   <Separator orientation="vertical" class="hidden h-6 lg:block" />
 
-  <div class="flex items-center gap-2">
+  <div class="flex items-center gap-2" data-guide="gridsize">
     <Choice label="Grid size" class="w-24" value={String(song.gridSize)} options={sizeOptions} onchange={(v) => setGridSize(Number(v))} />
     <Choice label="Time signature" class="w-20" value={String(song.beatsPerBar)} options={sigOptions} onchange={(v) => { song.beatsPerBar = Number(v); commit(); }} />
+    <HelpTip id="bar/gridSize" label="Grid size" />
   </div>
 
-  <div class="flex min-w-48 items-center gap-3">
+  <div class="flex min-w-48 items-center gap-3" data-guide="tempo">
     <Button variant="outline" size="sm" onclick={tapTempo}>Tap</Button>
     <Slider type="single" bind:value={tempo[0]} min={30} max={240} step={1} aria-label="Tempo"
       onValueChange={(v) => (song.tempo = v)} onValueCommit={commit} class="w-28" />
     <span class="w-14 font-mono text-sm tabular-nums">{song.tempo} <span class="text-muted-foreground text-xs">bpm</span></span>
+    <HelpTip id="bar/tempo" label="Tempo" />
   </div>
 
-  <div class="flex items-center gap-1">
+  <div class="flex items-center gap-1" data-guide="scale">
     <IconButton icon={ChevronLeft} label="Previous scale" onclick={() => stepScale(-1)} />
     <Choice label="Scale" class="w-44" value={song.scale} options={scaleOptions} onchange={(v) => { song.scale = v; commit(); }} />
     <IconButton icon={ChevronRight} label="Next scale" onclick={() => stepScale(1)} />
+    <HelpTip id="bar/scale" label="Scale" />
   </div>
 
-  <div class="ml-auto">
-    <IconButton icon={Info} label="About and shortcuts (?)" onclick={() => (ui.aboutOpen = true)} />
+  <div class="ml-auto flex items-center gap-1">
+    <Button variant="outline" size="sm" class="gap-1.5" onclick={() => (ui.tourOpen = true)} data-guide="guide" aria-keyshortcuts="H">
+      <BookOpen class="size-4" /> Guide
+    </Button>
+    <IconButton guide="about" icon={Info} label="About and shortcuts (?)" onclick={() => (ui.aboutOpen = true)} />
   </div>
 </header>
 <AboutDialog bind:open={ui.aboutOpen} />
