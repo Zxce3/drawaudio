@@ -1,593 +1,88 @@
 <script lang="ts">
-  import { onMount, onDestroy } from 'svelte';
-  import { on } from 'svelte/events';
-  import { AudioService } from '$lib/audio';
-  import { SCALES, getRowPitch, formatNote } from '$lib/scales';
+  import { onMount } from 'svelte';
+  import Transport from '$lib/components/app/Transport.svelte';
+  import Grid from '$lib/components/app/Grid.svelte';
+  import SidePanel from '$lib/components/app/SidePanel.svelte';
+  import TrackStrip from '$lib/components/app/TrackStrip.svelte';
+  import { song, commit, undo, redo, togglePlay, getEngine, disposeEngine, replaceSong } from '$lib/song.svelte';
+  import { decodeShare, sanitizeSong, toCompact } from '$lib/storage';
   import { updateSeo } from '$lib/seo';
-  
+
+  const AUTOSAVE_KEY = 'drawaudio:autosave';
+
   updateSeo({
     title: 'DrawAudio - Create Music by Drawing',
-    description: 'Draw patterns on a grid to create amazing musical sequences with this interactive audio sequencer. Experiment with different waveforms, effects, and musical scales.',
+    description:
+      'Draw notes on a grid to make music in your browser. Multi-track sequencer with synth sounds, effects, scales, MIDI export and shareable links.'
   });
-  
-  // Svelte 5 registers touchstart/touchmove delegated handlers as passive, so
-  // handlers that call preventDefault() need an explicit non-passive listener.
-  function nonPassive(node: HTMLElement, handlers: Record<string, (e: any) => void>) {
-    const offs = Object.entries(handlers).map(([type, fn]) =>
-      on(node, type, (e) => { e.preventDefault(); fn(e); }, { passive: false })
-    );
-    return { destroy: () => offs.forEach((off) => off()) };
-  }
 
-  type EffectParam = "delayTime" | "reverbMix" | "delayFeedback" | "distortion";
-
-  let audioService = $state.raw() as AudioService;
-  let matrix: boolean[][] = $state([]);
-  let matrixSize = $state(8); // Changed default to 8
-  let isAudioInitialized = $state(false);
-  let isPlaying = $state(false);
-  let activeColumn = $state(0);
-  let unsubscribe: (() => void) | null = null;
-
-  // UI state variables
-  let waveform: OscillatorType = $state('sine');
-  let gridSize = $state(8); // Changed default to 8
-  let tempo = $state(80);
-  let delay = $state(0.3);
-  let reverb = $state(0.3);
-  let delayGain = $state(0.3);
-  let distortion = $state(0);
-  let playbackPattern: 'forward' | 'backward' | 'bounce' | 'random' = $state('forward');
-
-  // Add new state
-  let currentScale = $state('Major');
-  let scaleOptions = Object.keys(SCALES);
-
-  let impulseType: 'reverb' | 'guitar' | 'drum' = $state('reverb');
-
-
-  // Add event options
-
-  let isDragging = false;
-  let lastDragPosition: { row: number; col: number } | null = null;
+  let ready = $state(false);
 
   onMount(() => {
-    initMatrix();
-    audioService = new AudioService(matrixSize);
-    
-    // Register step change callback
-    if (audioService) {
-      unsubscribe = audioService.onStepChange((step) => {
-        activeColumn = step;
-      });
-    }
-  });
-
-  onDestroy(() => {
-    unsubscribe?.();
-    audioService?.cleanup();
-  });
-
-  function initMatrix() {
-    matrix = Array(matrixSize).fill(0).map(() => Array(matrixSize).fill(false));
-  }
-
-  async function initAudio() {
-    if (!isAudioInitialized) {
-      await audioService.initialize();
-      // Push the current UI state into the engine before it is used
-      audioService.setBpm(tempo);
-      audioService.setScale(currentScale);
-      audioService.setWaveform(waveform);
-      audioService.setPlaybackPattern(playbackPattern);
-      audioService.setImpulseType(impulseType);
-      audioService.setParameter('delayTime', delay);
-      audioService.setParameter('reverbMix', reverb);
-      audioService.setParameter('delayFeedback', delayGain);
-      audioService.setParameter('distortion', distortion);
-      isAudioInitialized = true;
-    }
-  }
-
-  async function changeGridSize(newSize: number) {
-    matrixSize = newSize;
-    gridSize = newSize;
-    
-    if (audioService) {
-      const wasPlaying = audioService.isSequencePlaying();
-      audioService.resizeMatrix(newSize);
-      
-      // Update matrix after resize
-      initMatrix();
-      updateMatrix();
-      
-      if (wasPlaying) {
-        await audioService.startSequence();
-        isPlaying = true;
+    (async () => {
+      try {
+        const shared = location.hash.match(/^#s=(.+)$/)?.[1];
+        if (shared) replaceSong(await decodeShare(shared));
+        else {
+          const saved = localStorage.getItem(AUTOSAVE_KEY);
+          if (saved) replaceSong(sanitizeSong(JSON.parse(saved)));
+        }
+      } catch (error) {
+        console.warn('Could not restore song:', error);
       }
-    }
-  }
+      ready = true;
+    })();
+    return disposeEngine;
+  });
 
-  function handleDragStart(event: MouseEvent | TouchEvent, row: number, col: number) {
-    isDragging = true;
-    lastDragPosition = { row, col };
-    const currentValue = !matrix[row][col];
-    
-    event.preventDefault();
-    toggleCell(row, col, currentValue);
+  // Keep the audio graph in step with the song (mixer + effects)
+  $effect(() => {
+    song.tracks.map((t) => [t.id, t.volume, t.pan, t.reverbSend, t.mute, t.solo]);
+    if (ready) getEngine().syncTracks();
+  });
+  $effect(() => {
+    JSON.stringify(song.effects);
+    if (ready) getEngine().applyEffects();
+  });
 
-    // Browsers only allow audio after a user gesture: start the engine on the
-    // first touch of the grid so drawn notes can be heard right away.
-    if (!isAudioInitialized) {
-      initAudio().then(() => {
-        updateMatrix();
-        if (currentValue) audioService.updateSound(col, row);
-      }).catch((error) => console.error('Audio init failed:', error));
-    }
-  }
-
-  function handleDrag(event: MouseEvent | TouchEvent) {
-    if (!isDragging) return;
-
-    const gridElement = document.getElementById('matrix');
-    if (!gridElement) return;
-
-    const rect = gridElement.getBoundingClientRect();
-    const clientX = event instanceof MouseEvent ? event.clientX : event.touches[0].clientX;
-    const clientY = event instanceof MouseEvent ? event.clientY : event.touches[0].clientY;
-
-    const col = Math.floor((clientX - rect.left) / (rect.width / matrixSize));
-    const row = Math.floor((clientY - rect.top) / (rect.height / matrixSize));
-
-    // Only update if we've moved to a new cell and it's within bounds
-    if (row >= 0 && row < matrixSize && col >= 0 && col < matrixSize &&
-        (lastDragPosition?.row !== row || lastDragPosition?.col !== col)) {
-      toggleCell(row, col, matrix[lastDragPosition?.row ?? 0][lastDragPosition?.col ?? 0]);
-      lastDragPosition = { row, col };
-    }
-  }
-
-  function handleDragEnd() {
-    isDragging = false;
-    lastDragPosition = null;
-  }
-
-  function toggleCell(row: number, col: number, forceState?: boolean) {
-    if (row < 0 || row >= matrixSize || col < 0 || col >= matrixSize) return;
-
-    const newValue = forceState ?? !matrix[row][col];
-    matrix[row][col] = newValue;
-    
-    if (isAudioInitialized) {
-      updateMatrix();
-      if (newValue) {
-        audioService.updateSound(col, row);
+  // Autosave, debounced
+  $effect(() => {
+    if (!ready) return;
+    const data = JSON.stringify(toCompact($state.snapshot(song) as typeof song));
+    const timer = setTimeout(() => {
+      try {
+        localStorage.setItem(AUTOSAVE_KEY, data);
+      } catch {
+        /* storage unavailable: autosave is best-effort */
       }
-    }
-  }
-
-  function updateWaveform(type: OscillatorType) {
-    waveform = type;
-    if (isAudioInitialized) {
-      audioService.setWaveform(type);
-    }
-  }
-
-  function clearMatrix() {
-    matrix = Array(matrixSize).fill(0).map(() => Array(matrixSize).fill(false));
-    if (isAudioInitialized) {
-      audioService.stopSound();
-    }
-  }
-
-  async function togglePlayback() {
-    if (!isAudioInitialized) {
-      await initAudio();
-    }
-    
-    try {
-      if (isPlaying) {
-        audioService.stopSequence();
-        isPlaying = false;
-        activeColumn = -1; // Reset active column
-      } else {
-        await audioService.startSequence();
-        isPlaying = true;
-      }
-    } catch (error) {
-      console.error('Playback error:', error);
-      isPlaying = false;
-      activeColumn = -1; // Reset active column on error
-    }
-  }
-
-  function updateMatrix() {
-    if (!audioService) return;
-    const currentMatrix = matrix.map(row => row.map(cell => Boolean(cell)));
-    audioService.setMatrix(currentMatrix);
-  }
-
-  function setPattern(pattern: 'forward' | 'backward' | 'bounce' | 'random') {
-    playbackPattern = pattern;
-    audioService?.setPlaybackPattern(pattern);
-  }
-
-  async function updateScale(scale: string) {
-    currentScale = scale;
-    audioService?.setScale(scale);
-  }
-
-  function updateImpulse(type: 'reverb' | 'guitar' | 'drum') {
-    impulseType = type;
-    if (isAudioInitialized) {
-      audioService.setImpulseType(type);
-    }
-  }
-
-  function getGridCellClasses(rowIndex: number, colIndex: number, cell: boolean): string {
-    return [
-      'gridButton',
-      cell ? 'bg-blue-500' : 'bg-white hover:bg-blue-100',
-      colIndex % 4 === 0 && colIndex > 0 ? 'beat-line' : '',
-      getRowPitch(currentScale, matrixSize, rowIndex).isRoot ? 'octave-line' : '',
-      colIndex === activeColumn && isPlaying ? 'trigger-line' : '',
-      audioService?.isNotePlaying(rowIndex, colIndex) ? 'playing-note' : '',
-      audioService?.getActiveNotesInColumn(colIndex)?.includes(rowIndex) ? 'active-note' : ''
-    ].filter(Boolean).join(' ');
-  }
-
-  function updateEffect(param: EffectParam, value: number) {
-    if (isAudioInitialized) {
-      audioService.setParameter(param, value);
-    }
-  }
-
-  $effect(() => {
-    if (matrix && audioService && isAudioInitialized) {
-      updateMatrix();
-    }
+    }, 800);
+    return () => clearTimeout(timer);
   });
 
-  $effect(() => {
-    if (tempo && audioService && isAudioInitialized) {
-      audioService.setBpm(tempo);
-    }
-  });
-
-  $effect(() => {
-    if (audioService?.isSequencePlaying()) {
-      activeColumn = audioService.getCurrentStep();
-    }
-  });
-
-  const rowLabels = $derived(
-    Array.from({ length: matrixSize }, (_, row) => {
-      const pitch = getRowPitch(currentScale, matrixSize, row);
-      // Dense grids only label the root note of each octave
-      return matrixSize <= 16 || pitch.isRoot ? formatNote(pitch) : '';
-    })
-  );
-
-  function handleKeydown(event: KeyboardEvent) {
+  function onkeydown(event: KeyboardEvent) {
     const target = event.target as HTMLElement | null;
-    if (event.code !== 'Space' || target?.closest('input, select, textarea, button')) return;
-    event.preventDefault();
-    togglePlayback();
+    if (target?.closest('input, textarea, select, [role="slider"], [role="combobox"], [role="tab"]')) return;
+    const mod = event.ctrlKey || event.metaKey;
+    if (mod && event.key.toLowerCase() === 'z') {
+      event.preventDefault();
+      event.shiftKey ? redo() : undo();
+    } else if (mod && event.key.toLowerCase() === 'y') {
+      event.preventDefault();
+      redo();
+    } else if (event.code === 'Space' && !target?.closest('button, a')) {
+      event.preventDefault();
+      togglePlay();
+    }
   }
-
-  const patterns = [
-    { id: 'forward', icon: '→', label: 'Forward' },
-    { id: 'backward', icon: '←', label: 'Backward' },
-    { id: 'bounce', icon: '↔', label: 'Bounce' },
-    { id: 'random', icon: '⟳', label: 'Random' }
-  ];
-
-  const effectControls = $derived([
-    {id: 'delayTime' as EffectParam, label: 'Delay Time', value: delay, min: 0, max: 1, step: 0.01},
-    {id: 'reverbMix' as EffectParam, label: 'Reverb Mix', value: reverb, min: 0, max: 1, step: 0.01},
-    {id: 'delayFeedback' as EffectParam, label: 'Delay Feedback', value: delayGain, min: 0, max: 0.9, step: 0.01},
-    {id: 'distortion' as EffectParam, label: 'Distortion', value: distortion, min: 0, max: 50, step: 1}
-  ]);
 </script>
 
-<svelte:window onkeydown={handleKeydown} />
+<svelte:window {onkeydown} />
 
-<main class="min-h-screen bg-gray-100">
-  <div id="pageContainer" class="container mx-auto p-4">
-    <!-- Main Layout Grid -->
-    <div class="grid lg:grid-cols-2 gap-6">
-      <!-- Left Column: Matrix Grid -->
-      <div class="space-y-4">
-        <!-- Top Controls -->
-        <div class="flex flex-wrap gap-4">
-          <button 
-            class="px-4 py-2 {isPlaying ? 'bg-red-500 hover:bg-red-600' : 'bg-green-500 hover:bg-green-600'} text-white rounded transition-colors"
-            onclick={togglePlayback}
-          >
-            {isPlaying ? 'Stop' : 'Play'}
-          </button>
-          <button 
-            class="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
-            onclick={clearMatrix}
-          >
-            Clear Pattern
-          </button>
-          <select 
-            class="px-3 py-2 border border-gray-300 rounded bg-white"
-            bind:value={gridSize}
-            onchange={() => changeGridSize(gridSize)}
-          >
-            <option value={8}>8x8</option>
-            <option value={16}>16x16</option>
-            <option value={32}>32x32</option>
-            <option value={64}>64x64</option>
-          </select>
-        </div>
-
-        <!-- Matrix Grid -->
-        <div class="flex aspect-square w-full overflow-hidden border border-gray-300 bg-white rounded-lg shadow-md">
-          <div
-            class="grid shrink-0 bg-gray-50 border-r border-gray-300 text-[10px] leading-none text-gray-500 select-none"
-            style="grid-template-rows: repeat({matrixSize}, 1fr); width: 2.5rem;"
-            aria-hidden="true"
-          >
-            {#each rowLabels as label}
-              <span class="flex items-center justify-end pr-1 overflow-hidden">{label}</span>
-            {/each}
-          </div>
-          <div 
-            id="matrix" 
-            role="grid"
-            tabindex="-1"
-            aria-label="Sound grid"
-            class="grid flex-1 h-full select-none"
-            style="grid-template-columns: repeat({matrixSize}, 1fr); grid-auto-rows: 1fr;"
-            onmousemove={handleDrag}
-            onmouseup={handleDragEnd}
-            onmouseleave={handleDragEnd}
-            use:nonPassive={{ touchmove: handleDrag }}
-            ontouchend={handleDragEnd}
-            ontouchcancel={handleDragEnd}
-          >
-            {#each matrix as row, rowIndex}
-              {#each row as cell, colIndex}
-                <button
-                  class={getGridCellClasses(rowIndex, colIndex, cell)}
-                  data-row={rowIndex}
-                  data-col={colIndex}
-                  onmousedown={(e) => handleDragStart(e, rowIndex, colIndex)}
-                  aria-label={`Row ${rowIndex + 1}, column ${colIndex + 1}`}
-                  aria-pressed={cell}
-                  use:nonPassive={{ touchstart: (e) => handleDragStart(e, rowIndex, colIndex) }}
-                ></button>
-              {/each}
-            {/each}
-          </div>
-        </div>
-
-        <div class="mt-4 text-center">
-          <a 
-            href="https://github.com/Zxce3/drawaudio-tmp" 
-            target="_blank" 
-            rel="noopener noreferrer"
-            class="text-blue-600 hover:text-blue-800 transition-colors text-sm"
-          >
-            Source Code Available on GitHub
-          </a>
-        </div>
-      </div>
-
-      <!-- Right Column: Controls -->
-      <div class="space-y-6">
-        <!-- Controls Section -->
-        <div class="bg-white rounded-lg shadow-sm p-4 border border-gray-200">
-          <div class="mb-4">
-            <h3 class="text-lg font-semibold text-gray-800">Controls</h3>
-          </div>
-          <div class="space-y-4">
-            <!-- Waveform Controls -->
-            <div class="grid grid-cols-4 gap-2">
-              {#each ['sine', 'sawtooth', 'triangle', 'square'] as type}
-                <button 
-                  class="aspect-square border rounded-md cursor-pointer transition-colors
-                         {waveform === type ? 'border-blue-500 bg-blue-50' : 'border-gray-300 hover:bg-gray-50'}"
-                  onclick={() => updateWaveform(type as OscillatorType)}
-                  aria-label={`Set waveform to ${type}`}
-                >{type}</button>
-              {/each}
-            </div>
-
-            <!-- Rest of controls... -->
-            <div class="space-y-2">
-              <div class="flex justify-between">
-                <label for="tempoSlider" class="text-sm text-gray-600">Tempo:</label>
-                <span class="text-sm text-gray-600">{tempo} bpm</span>
-              </div>
-              <input 
-                type="range" 
-                id="tempoSlider"
-                class="w-full"
-                bind:value={tempo}
-                min="40"
-                max="200"
-                step="1"
-              />
-            </div>
-
-            <div class="space-y-2">
-              <label for="scaleSelect" class="text-sm text-gray-600">Scale:</label>
-              <select 
-                id="scaleSelect"
-                class="w-full px-3 py-2 border border-gray-300 rounded"
-                bind:value={currentScale}
-                onchange={() => updateScale(currentScale)}
-              >
-                {#each scaleOptions as scale}
-                  <option value={scale}>{scale}</option>
-                {/each}
-              </select>
-            </div>
-
-            <!-- Add Pattern Controls -->
-            <div class="space-y-2">
-              <span class="text-sm text-gray-600">Pattern:</span>
-              <div class="grid grid-cols-4 gap-2">
-                {#each patterns as { id, icon, label }}
-                  <button
-                    class="px-4 py-2 border rounded-md transition-colors aspect-square flex items-center justify-center text-xl
-                           {playbackPattern === id ? 'bg-blue-500 text-white' : 'bg-white hover:bg-blue-100'}"
-                    onclick={() => setPattern(id as typeof playbackPattern)}
-                    aria-label={label}
-                  >
-                    {icon}
-                  </button>
-                {/each}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Effects Section -->
-        <div class="bg-white rounded-lg shadow-sm p-4 border border-gray-200">
-          <div class="mb-4">
-            <h3 class="text-lg font-semibold text-gray-800">Effects</h3>
-          </div>
-          <div class="space-y-4">
-            {#each effectControls as param}
-              <div class="space-y-2">
-                <div class="flex justify-between">
-                  <label for={`fx-${param.id}`} class="text-sm text-gray-600">{param.label}:</label>
-                  <span class="text-sm text-gray-600">{param.value.toFixed(2)}</span>
-                </div>
-                <input 
-                  type="range"
-                  id={`fx-${param.id}`}
-                  class="w-full"
-                  value={param.value}
-                  min={param.min}
-                  max={param.max}
-                  step={param.step}
-                  oninput={(e) => {
-                    const value = parseFloat(e.currentTarget.value);
-                    switch(param.id) {
-                      case 'delayTime': delay = value; break;
-                      case 'reverbMix': reverb = value; break;
-                      case 'delayFeedback': delayGain = value; break;
-                      case 'distortion': distortion = value; break;
-                    }
-                    updateEffect(param.id, value);
-                  }}
-                />
-              </div>
-            {/each}
-            <div class="space-y-2">
-              <span class="text-sm text-gray-600">Impulse Response:</span>
-              <div class="grid grid-cols-3 gap-2">
-                {#each ['reverb', 'guitar', 'drum'] as type}
-                  <button
-                    class="px-3 py-2 border rounded-md transition-colors
-                           {impulseType === type ? 'bg-blue-500 text-white' : 'bg-white hover:bg-blue-100'}"
-                    onclick={() => updateImpulse(type as 'reverb' | 'guitar' | 'drum')}
-                  >
-                    {type}
-                  </button>
-                {/each}
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-</main>
-
-<style>
-  .gridButton {
-    border: 0.5px solid rgba(0, 0, 0, 0.15);
-    width: 100%;
-    height: 100%;
-    padding: 0;
-    margin: 0;
-    touch-action: none; /* Prevent scrolling on touch devices */
-    -webkit-touch-callout: none;
-    -webkit-user-select: none;
-    user-select: none;
-    transition: all 0.1s ease;
-  }
-
-  .beat-line {
-    border-left: 1px solid rgba(0, 0, 0, 0.4);
-  }
-
-  .octave-line {
-    border-top: 1px solid rgba(0, 0, 0, 0.4);
-  }
-
-  @keyframes pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.5; }
-  }
-
-  .animate-pulse {
-    animation: pulse 0.5s ease-in-out infinite;
-  }
-
-  .trigger-line {
-    position: relative;
-  }
-
-  .trigger-line::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: rgba(234, 179, 8, 0.15);
-    border-left: 2px solid rgba(234, 179, 8, 0.6);
-    border-right: 2px solid rgba(234, 179, 8, 0.6);
-    pointer-events: none;
-    z-index: 10;
-    transition: opacity 0.1s ease;
-  }
-
-  .playing-note {
-    animation: playPulse 0.2s ease-in-out infinite;
-    background-color: rgb(34, 197, 94) !important; /* Green */
-    box-shadow: 0 0 8px rgba(34, 197, 94, 0.4);
-  }
-
-  @keyframes playPulse {
-    0% {
-      transform: scale(0.95);
-      opacity: 0.8;
-    }
-    50% {
-      transform: scale(1.05);
-      opacity: 1;
-    }
-    100% {
-      transform: scale(0.95);
-      opacity: 0.8;
-    }
-  }
-
-  .active-note {
-    border: 2px solid rgb(144, 187, 255);
-  }
-
-  @media (max-width: 1024px) {
-    #pageContainer {
-      max-width: 100%;
-      padding: 1rem;
-    }
-  }
-
-  @media (min-width: 1024px) {
-    #pageContainer {
-      max-width: 1280px;
-      padding: 2rem;
-    }
-  }
-
-</style>
+<div class="flex h-dvh min-h-0 flex-col">
+  <Transport />
+  <main class="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-3 lg:flex-row lg:overflow-hidden">
+    <Grid />
+    <SidePanel />
+  </main>
+  <TrackStrip />
+</div>

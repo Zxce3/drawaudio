@@ -4,6 +4,16 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* The generated shadcn-svelte styles use boolean data-* variants; bits-ui
+   exposes state through data-state / data-orientation, so map them. */
+@custom-variant data-open (&:is([data-state='open'], [data-open]));
+@custom-variant data-closed (&:is([data-state='closed'], [data-closed]));
+@custom-variant data-active (&:is([data-state='active'], [data-active]));
+@custom-variant data-checked (&:is([data-state='checked'], [data-checked]));
+@custom-variant data-unchecked (&:is([data-state='unchecked'], [data-unchecked]));
+@custom-variant data-horizontal (&:is([data-orientation='horizontal'], [data-horizontal]));
+@custom-variant data-vertical (&:is([data-orientation='vertical'], [data-vertical]));
+
 /* shadcn-svelte theme tokens (zinc). The app is dark by default. */
 :root {
 	--radius: 0.5rem;
@@ -55,6 +65,8 @@
 	--radius-lg: var(--radius);
 	--radius-xl: calc(var(--radius) + 4px);
 }
+
+html { color-scheme: dark; }
 
 @layer base {
 	* {

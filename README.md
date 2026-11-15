@@ -10,15 +10,14 @@ An interactive audio sequencer where you can create music by drawing patterns on
 
 ## Features
 
-- Visual sequencer with adjustable grid sizes (8×8, 16×16, 32×32, 64×64)
-- Multiple waveform types (sine, sawtooth, triangle, square)
-- Various playback patterns (forward, backward, bounce, random)
-- Real-time audio effects:
-  - Adjustable delay with feedback
-  - Reverb with different impulse responses
-  - Distortion
-- Musical scale selection
-- Interactive drawing interface with drag support
+- **Piano-roll grid** (8×8 to 64×64) on a canvas: drag to draw, right-click to erase, note-name labels, beat and bar lines, keyboard control
+- **Multiple tracks** with mute, solo, volume, pan and reverb send; other tracks show as ghost notes
+- **Synth per track**: sine, triangle, saw, square and pulse waves, ADSR, filter, sub oscillator, noise, unison, FM and sound presets
+- **Effects**: delay, convolution reverb (plate, guitar cabinet, drum room), distortion, chorus and a 3-band EQ
+- **Transport**: tempo with tap tempo, time signatures, scales with prev/next, playback direction, undo and redo
+- **Tools**: random melody generator and transpose
+- **Songs**: autosave, saved songs in the browser, shareable links and MIDI import/export
+- Built with SvelteKit, Svelte 5 runes, Tailwind CSS 4 and shadcn-svelte
 
 ## Getting Started
 

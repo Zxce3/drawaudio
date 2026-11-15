@@ -1,5 +1,6 @@
 <script lang="ts">
 	import '../app.css';
+	import * as Tooltip from '$lib/components/ui/tooltip';
 	import { DEFAULT_SEO, generateSeoTags, type SeoProps } from '$lib/seo';
 	
 	let { children } = $props();
@@ -43,4 +44,6 @@
 	<link rel="canonical" href={seo.url} />
 </svelte:head>
 
-{@render children()}
+<Tooltip.Provider delayDuration={300}>
+	{@render children()}
+</Tooltip.Provider>
