@@ -109,3 +109,28 @@ test('sanitize accepts new playback and delay modes', () => {
   expect(s.tracks[0].params.waveform).toBe('wavetable');
   expect(s.tracks[0].params.wavetable).toBe('vocal');
 });
+
+import { EXAMPLE_SONGS, RAW_SPECS, SPEC_STEP_COUNT } from '../src/lib/songs';
+
+test('there are 10 valid example songs', () => {
+  expect(EXAMPLE_SONGS.length).toBe(10);
+  expect(new Set(EXAMPLE_SONGS.map((s) => s.id)).size).toBe(10);
+  for (const spec of RAW_SPECS) {
+    for (const t of spec.tracks) {
+      const tokens = t.steps.trim().split(/\s+/);
+      expect(tokens.length).toBe(SPEC_STEP_COUNT);
+      for (const tok of tokens) if (tok !== '.') for (const n of tok.split(',')) expect(Number(n)).toBeGreaterThanOrEqual(0);
+    }
+  }
+  for (const example of EXAMPLE_SONGS) {
+    const song = example.create();
+    expect(song.tracks.length).toBeGreaterThan(0);
+    for (const track of song.tracks) expect(track.matrix.flat().some(Boolean)).toBe(true);
+    // survives the same validation as shared links
+    const clean = sanitizeSong(JSON.parse(JSON.stringify(toCompact(song))));
+    expect(clean.scale).toBe(song.scale);
+    expect(clean.tracks.length).toBe(song.tracks.length);
+    expect(clean.tracks[0].matrix).toEqual(song.tracks[0].matrix);
+    expect(clean.effects.delayMode).toBe(song.effects.delayMode);
+  }
+});

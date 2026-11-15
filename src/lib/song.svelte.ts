@@ -72,10 +72,12 @@ export function redo() {
 }
 
 /** Replace the whole song (load, import, share link) and reset undo history */
-export function replaceSong(next: Song) {
+export function replaceSong(next: Song, keepHistory = false) {
   Object.assign(song, next);
-  history = [];
-  cursor = -1;
+  if (!keepHistory) {
+    history = [];
+    cursor = -1;
+  }
   commit();
 }
 

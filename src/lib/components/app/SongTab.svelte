@@ -7,6 +7,7 @@
   import { song, replaceSong, commit } from '$lib/song.svelte';
   import { saveSong, listSongs, deleteSong, encodeShare, sanitizeSong, type SavedSong } from '$lib/storage';
   import { exportMidi, parseMidi, midiToSong } from '$lib/midi';
+  import { EXAMPLE_SONGS, type ExampleSong } from '$lib/songs';
 
   let songs = $state<SavedSong[]>([]);
   let currentId = $state<string | undefined>();
@@ -27,6 +28,12 @@
     } catch {
       say('Could not save: browser storage is unavailable or full.');
     }
+  }
+
+  function loadExample(example: ExampleSong) {
+    replaceSong(example.create(), true); // undoable, so nothing is lost
+    currentId = undefined;
+    say(`Loaded “${example.name}”. Press Ctrl+Z to go back to your previous song.`);
   }
 
   function open(saved: SavedSong) {
@@ -95,6 +102,24 @@
     </div>
     <input bind:this={fileInput} type="file" accept=".mid,.midi,audio/midi" class="hidden" onchange={importFile} />
     <p class="text-muted-foreground text-xs">Import replaces the current song (up to 8 tracks, notes snap to sixteenths).</p>
+  </section>
+
+  <section class="space-y-2">
+    <h3 class="text-sm font-medium">Example songs</h3>
+    <ul class="space-y-1">
+      {#each EXAMPLE_SONGS as example (example.id)}
+        <li>
+          <button
+            type="button"
+            onclick={() => loadExample(example)}
+            class="bg-card hover:bg-accent focus-visible:ring-ring w-full rounded-md border px-3 py-2 text-left focus-visible:ring-2 focus-visible:outline-none"
+          >
+            <span class="block text-sm">{example.name}</span>
+            <span class="text-muted-foreground block text-xs">{example.description}</span>
+          </button>
+        </li>
+      {/each}
+    </ul>
   </section>
 
   <section class="space-y-2">

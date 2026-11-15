@@ -6,6 +6,7 @@
   import TrackStrip from '$lib/components/app/TrackStrip.svelte';
   import { song, commit, undo, redo, togglePlay, getEngine, disposeEngine, replaceSong } from '$lib/song.svelte';
   import { decodeShare, sanitizeSong, toCompact } from '$lib/storage';
+  import { EXAMPLE_SONGS } from '$lib/songs';
   import { updateSeo } from '$lib/seo';
 
   const AUTOSAVE_KEY = 'drawaudio:autosave';
@@ -25,7 +26,8 @@
         if (shared) replaceSong(await decodeShare(shared));
         else {
           const saved = localStorage.getItem(AUTOSAVE_KEY);
-          if (saved) replaceSong(sanitizeSong(JSON.parse(saved)));
+          // First visit: start with an example so there is something to hear
+          replaceSong(saved ? sanitizeSong(JSON.parse(saved)) : EXAMPLE_SONGS[0].create());
         }
       } catch (error) {
         console.warn('Could not restore song:', error);
