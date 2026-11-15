@@ -61,31 +61,49 @@ export function getFrequency(note: NoteName, octave: number): number {
   return frequencies[index];
 }
 
+const NOTE_RATIOS: Record<NoteName, number> = {
+  C: 1, Cs: 1.059463, D: 1.122462, Ds: 1.189207, E: 1.259921, F: 1.33484,
+  Fs: 1.414214, G: 1.498307, Gs: 1.587401, A: 1.681793, As: 1.781797, B: 1.887749
+};
+const MIDDLE_C = 261.63;
+
 export function getScaleFrequencies(scale: keyof typeof SCALES, octave: number): number[] {
-  const scaleNotes = SCALES[scale];
-  const baseFreq = 261.63; // Middle C (C4)
-  const chromaticRatios = {
-    'C': 1,
-    'Cs': 1.059463,
-    'D': 1.122462,
-    'Ds': 1.189207,
-    'E': 1.259921,
-    'F': 1.334840,
-    'Fs': 1.414214,
-    'G': 1.498307,
-    'Gs': 1.587401,
-    'A': 1.681793,
-    'As': 1.781797,
-    'B': 1.887749
-  };
-
-  // Calculate octave shift
   const octaveShift = Math.pow(2, octave - 4);
+  return SCALES[scale].map((note) => MIDDLE_C * NOTE_RATIOS[note] * octaveShift);
+}
 
-  return scaleNotes.map(note => {
-    const ratio = chromaticRatios[note as keyof typeof chromaticRatios];
-    return baseFreq * ratio * octaveShift;
-  });
+export interface RowPitch {
+  note: NoteName;
+  octave: number;
+  frequency: number;
+  isRoot: boolean;
+}
+
+/**
+ * Maps a grid row to a pitch. Row 0 is the TOP of the grid and the highest
+ * pitch (like a piano roll). The pitch range is kept to 4-6 octaves so large
+ * grids never produce inaudible or painful frequencies.
+ */
+export function getRowPitch(scale: string, gridSize: number, row: number): RowPitch {
+  const notes = SCALES[scale] ?? SCALES.Major;
+  const len = notes.length;
+  const span = Math.min(6, Math.max(4, Math.ceil(gridSize / len)));
+  const baseOctave = span > 4 ? 2 : 3;
+  const maxDegrees = len * span;
+  const p = Math.min(Math.max(gridSize - 1 - row, 0), gridSize - 1);
+  const degree = gridSize <= maxDegrees ? p : Math.floor((p * maxDegrees) / gridSize);
+  const note = notes[degree % len];
+  const octave = baseOctave + Math.floor(degree / len);
+  return {
+    note,
+    octave,
+    frequency: MIDDLE_C * NOTE_RATIOS[note] * Math.pow(2, octave - 4),
+    isRoot: degree % len === 0
+  };
+}
+
+export function formatNote(pitch: RowPitch): string {
+  return `${pitch.note.replace('s', '#')}${pitch.octave}`;
 }
 
 // Helper type to get array of available scales

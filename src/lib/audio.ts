@@ -1,4 +1,5 @@
-import { getScaleFrequencies } from './scales';
+import { base } from '$app/paths';
+import { getRowPitch } from './scales';
 
 export class AudioService {
   private audioContext: AudioContext | null = null;
@@ -7,6 +8,11 @@ export class AudioService {
   private filterNode: BiquadFilterNode | null = null;
   private delayNode: DelayNode | null = null;
   private delayGainNode: GainNode | null = null;
+  private delayWetNode: GainNode | null = null;
+  private distortionNode: WaveShaperNode | null = null;
+  private busNode: GainNode | null = null;
+  private compressorNode: DynamicsCompressorNode | null = null;
+  private currentImpulse = 'reverb';
   private convolverNode: ConvolverNode | null = null;
   private reverbGainNode: GainNode | null = null;
   private isInitialized = false;
@@ -41,15 +47,15 @@ export class AudioService {
 
   // Audio parameters with defaults
   private params = {
-    attack: 0.05,    // Increased attack time
-    decay: 0.2,      // Increased decay time
-    sustain: 0.7,    // Increased sustain level
-    release: 0.3,    // Increased release time
+    attack: 0.01,
+    decay: 0.1,
+    sustain: 0.6,
+    release: 0.25,
     delayTime: 0.3,
     delayFeedback: 0.3,
     reverbMix: 0.3,
-    filterCutoff: 2000,  // Lower cutoff frequency
-    filterResonance: 2,  // Increased resonance
+    filterCutoff: 6000,
+    filterResonance: 0.7,
     distortion: 0,
     waveform: 'sine' as OscillatorType
   };
@@ -57,12 +63,10 @@ export class AudioService {
   private activeNotes: Set<number> = new Set();
   private notesInColumn: Map<number, number[]> = new Map();
   private currentScale = 'Major';
-  private currentOctave = 4;
-  private worker: Worker | null = null;
+    private worker: Worker | null = null;
   private activePlayingNotes: Set<string> = new Set(); // Format: "row,col"
   private previousStep: number = -1;
   private playStepCallbacks: Set<(step: number) => void> = new Set();
-  private scaleFrequencies: number[] = [];
   private impulseResponses: Map<string, AudioBuffer> = new Map();
 
   constructor(private matrixSize: number = 64) {
@@ -71,6 +75,7 @@ export class AudioService {
 
   private createWorker(): void {
     this.worker = new Worker(new URL('./worker.ts', import.meta.url));
+    this.worker.postMessage({ type: 'setTempo', payload: this.bpm });
     this.worker.onmessage = ({ data }) => {
       if (data.type === 'playStep') {
         this.playCurrentStep();
@@ -103,6 +108,13 @@ export class AudioService {
     this.delayGainNode = this.audioContext.createGain();
     this.convolverNode = this.audioContext.createConvolver();
     this.reverbGainNode = this.audioContext.createGain();
+    this.delayWetNode = this.audioContext.createGain();
+    this.distortionNode = this.audioContext.createWaveShaper();
+    this.distortionNode.oversample = '4x';
+    this.busNode = this.audioContext.createGain();
+    this.compressorNode = this.audioContext.createDynamicsCompressor();
+    this.delayWetNode.gain.value = 0.6;
+    this.distortionNode.curve = this.makeDistortionCurve(this.params.distortion);
 
     // Configure nodes
     this.oscillator.type = this.params.waveform;
@@ -114,17 +126,21 @@ export class AudioService {
     this.delayGainNode.gain.value = this.params.delayFeedback;
     this.reverbGainNode.gain.value = this.params.reverbMix;
 
-    // Connect nodes
+    // Signal flow: voices -> filter -> distortion -> bus -> (dry | delay | reverb) -> compressor -> out
     this.oscillator.connect(this.gainNode);
     this.gainNode.connect(this.filterNode);
-    this.filterNode.connect(this.audioContext.destination);
-    this.filterNode.connect(this.delayNode);
+    this.filterNode.connect(this.distortionNode);
+    this.distortionNode.connect(this.busNode);
+    this.busNode.connect(this.compressorNode);
+    this.busNode.connect(this.delayNode);
     this.delayNode.connect(this.delayGainNode);
     this.delayGainNode.connect(this.delayNode);
-    this.delayGainNode.connect(this.audioContext.destination);
-    this.filterNode.connect(this.convolverNode);
+    this.delayNode.connect(this.delayWetNode);
+    this.delayWetNode.connect(this.compressorNode);
+    this.busNode.connect(this.convolverNode);
     this.convolverNode.connect(this.reverbGainNode);
-    this.reverbGainNode.connect(this.audioContext.destination);
+    this.reverbGainNode.connect(this.compressorNode);
+    this.compressorNode.connect(this.audioContext.destination);
 
     // Start oscillator
     this.oscillator.start();
@@ -133,21 +149,24 @@ export class AudioService {
   private async loadImpulseResponse(): Promise<void> {
     if (!this.audioContext || !this.convolverNode) return;
 
-    const impulseTypes = ['plate-reverb', 'guitar-cab', 'drum-room'];
-    
+    const files: Record<string, string> = {
+      reverb: 'plate-reverb',
+      guitar: 'guitar-cab',
+      drum: 'drum-room'
+    };
+
     try {
-      for (const type of impulseTypes) {
-        const response = await fetch(`/impulse-${type}.wav`);
+      for (const [type, file] of Object.entries(files)) {
+        const response = await fetch(`${base}/impulse-${file}.wav`);
         if (!response.ok) {
-          throw new Error(`Impulse response ${type} not found`);
+          throw new Error(`Impulse response ${file} not found`);
         }
         const arrayBuffer = await response.arrayBuffer();
         const audioBuffer = await this.audioContext.decodeAudioData(arrayBuffer);
         this.impulseResponses.set(type, audioBuffer);
       }
-      
-      // Set default impulse
-      this.convolverNode.buffer = this.impulseResponses.get('reverb') || null;
+
+      this.convolverNode.buffer = this.impulseResponses.get(this.currentImpulse) || null;
     } catch (error) {
       console.warn('Using fallback impulse response:', error);
       const sampleRate = this.audioContext.sampleRate;
@@ -165,6 +184,17 @@ export class AudioService {
       
       this.convolverNode.buffer = impulse;
     }
+  }
+
+  private makeDistortionCurve(amount: number): Float32Array<ArrayBuffer> | null {
+    if (amount <= 0) return null;
+    const n = 1024;
+    const curve = new Float32Array(n);
+    for (let i = 0; i < n; i++) {
+      const x = (i * 2) / n - 1;
+      curve[i] = ((3 + amount) * x * 20 * (Math.PI / 180)) / (Math.PI + amount * Math.abs(x));
+    }
+    return curve;
   }
 
   private sendWorkerMessage(type: string, payload?: any): void {
@@ -307,51 +337,24 @@ export class AudioService {
     return this.isPlaying;
   }
 
+  /** Preview a note while drawing */
   updateSound(x: number, y: number): void {
-    if (!this.isInitialized || !this.audioContext || !this.oscillator || !this.gainNode) return;
-
-    const frequency = this.getFrequency(x, y);
-    const volume = this.getVolume(y);
-
-    // Apply ADSR envelope
-    const now = this.audioContext.currentTime;
-    this.gainNode.gain.cancelScheduledValues(now);
-    this.gainNode.gain.setValueAtTime(0, now);
-    this.gainNode.gain.linearRampToValueAtTime(volume, now + this.params.attack);
-    this.gainNode.gain.linearRampToValueAtTime(volume * this.params.sustain, now + this.params.attack + this.params.decay);
-    this.gainNode.gain.linearRampToValueAtTime(0, now + this.params.attack + this.params.decay + this.params.release);
-
-    this.oscillator.frequency.setTargetAtTime(frequency, now, 0.003);
+    if (!this.isInitialized || !this.audioContext) return;
+    this.triggerNote(this.getFrequency(x, y), this.getVolume(y), this.audioContext.currentTime);
   }
 
-  private getFrequency(x: number, y: number): number {
-    // Get note from scale based on y position
-    const scaleLength = this.scaleFrequencies.length;
-    if (scaleLength === 0) {
-      // Fallback to chromatic scale if no scale is set
-      const minFreq = 65.41; // C2
-      const maxFreq = 1046.50; // C6
-      return minFreq * Math.pow(2, (y / this.matrixSize) * 4);
-    }
-
-    // Map y position to scale index
-    const octaveSize = scaleLength;
-    const octave = Math.floor(y / octaveSize);
-    const noteIndex = y % octaveSize;
-    const baseFreq = this.scaleFrequencies[noteIndex];
-
-    // Shift octaves
-    return baseFreq * Math.pow(2, octave);
+  private getFrequency(_x: number, y: number): number {
+    return getRowPitch(this.currentScale, this.matrixSize, y).frequency;
   }
 
-  private getVolume(y: number): number {
-    return 1 - (y / this.matrixSize);
+  private getVolume(_y: number): number {
+    // The master compressor keeps dense columns from clipping
+    return 0.4;
   }
 
   setWaveform(type: OscillatorType): void {
-    if (!this.oscillator) return;
     this.params.waveform = type;
-    this.oscillator.type = type;
+    if (this.oscillator) this.oscillator.type = type;
   }
 
   stopSound(): void {
@@ -388,7 +391,7 @@ export class AudioService {
         this.reverbGainNode?.gain.setTargetAtTime(value, time, 0.1);
         break;
       case 'distortion':
-        // Add distortion effect when implemented
+        if (this.distortionNode) this.distortionNode.curve = this.makeDistortionCurve(value);
         break;
     }
   }
@@ -449,32 +452,14 @@ export class AudioService {
 
   setScale(scale: string): void {
     this.currentScale = scale;
-    this.updateFrequencyMap();
   }
 
-  private updateFrequencyMap(): void {
-    // Get base frequencies for the selected scale
-    this.scaleFrequencies = getScaleFrequencies(this.currentScale, this.currentOctave);
-    
-    // Update all active notes with new frequencies if playing
-    if (this.isPlaying) {
-      const activeRows = this.notesInColumn.get(this.currentStep);
-      if (activeRows && this.audioContext) {
-        const now = this.audioContext.currentTime;
-        activeRows.forEach(row => {
-          const frequency = this.getFrequency(this.currentStep, row);
-          const volume = this.getVolume(row);
-          this.triggerNote(frequency, volume, now);
-        });
-      }
-    }
+  getRowLabelInfo(row: number) {
+    return getRowPitch(this.currentScale, this.matrixSize, row);
   }
 
   isNotePlaying(row: number, col: number): boolean {
-    return (
-      this.activePlayingNotes.has(`${row},${col}`) || 
-      (this.isPlaying && col === this.currentStep)
-    );
+    return this.activePlayingNotes.has(`${row},${col}`);
   }
 
   isColumnActive(col: number): boolean {
@@ -504,6 +489,7 @@ export class AudioService {
   }
 
   setImpulseType(type: 'reverb' | 'guitar' | 'drum'): void {
+    this.currentImpulse = type;
     if (this.convolverNode && this.impulseResponses.has(type)) {
       this.convolverNode.buffer = this.impulseResponses.get(type) || null;
     }

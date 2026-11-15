@@ -2,7 +2,7 @@
   import { onMount, onDestroy } from 'svelte';
   import { on } from 'svelte/events';
   import { AudioService } from '$lib/audio';
-  import { SCALES } from '$lib/scales';
+  import { SCALES, getRowPitch, formatNote } from '$lib/scales';
   import { updateSeo } from '$lib/seo';
   
   updateSeo({
@@ -75,6 +75,16 @@
   async function initAudio() {
     if (!isAudioInitialized) {
       await audioService.initialize();
+      // Push the current UI state into the engine before it is used
+      audioService.setBpm(tempo);
+      audioService.setScale(currentScale);
+      audioService.setWaveform(waveform);
+      audioService.setPlaybackPattern(playbackPattern);
+      audioService.setImpulseType(impulseType);
+      audioService.setParameter('delayTime', delay);
+      audioService.setParameter('reverbMix', reverb);
+      audioService.setParameter('delayFeedback', delayGain);
+      audioService.setParameter('distortion', distortion);
       isAudioInitialized = true;
     }
   }
@@ -103,8 +113,17 @@
     lastDragPosition = { row, col };
     const currentValue = !matrix[row][col];
     
-    toggleCell(row, col, currentValue);
     event.preventDefault();
+    toggleCell(row, col, currentValue);
+
+    // Browsers only allow audio after a user gesture: start the engine on the
+    // first touch of the grid so drawn notes can be heard right away.
+    if (!isAudioInitialized) {
+      initAudio().then(() => {
+        updateMatrix();
+        if (currentValue) audioService.updateSound(col, row);
+      }).catch((error) => console.error('Audio init failed:', error));
+    }
   }
 
   function handleDrag(event: MouseEvent | TouchEvent) {
@@ -195,11 +214,7 @@
 
   async function updateScale(scale: string) {
     currentScale = scale;
-    if (audioService && isAudioInitialized) {
-      audioService.setScale(scale);
-      // Update matrix to trigger new frequencies
-      updateMatrix();
-    }
+    audioService?.setScale(scale);
   }
 
   function updateImpulse(type: 'reverb' | 'guitar' | 'drum') {
@@ -213,6 +228,8 @@
     return [
       'gridButton',
       cell ? 'bg-blue-500' : 'bg-white hover:bg-blue-100',
+      colIndex % 4 === 0 && colIndex > 0 ? 'beat-line' : '',
+      getRowPitch(currentScale, matrixSize, rowIndex).isRoot ? 'octave-line' : '',
       colIndex === activeColumn && isPlaying ? 'trigger-line' : '',
       audioService?.isNotePlaying(rowIndex, colIndex) ? 'playing-note' : '',
       audioService?.getActiveNotesInColumn(colIndex)?.includes(rowIndex) ? 'active-note' : ''
@@ -243,6 +260,21 @@
     }
   });
 
+  const rowLabels = $derived(
+    Array.from({ length: matrixSize }, (_, row) => {
+      const pitch = getRowPitch(currentScale, matrixSize, row);
+      // Dense grids only label the root note of each octave
+      return matrixSize <= 16 || pitch.isRoot ? formatNote(pitch) : '';
+    })
+  );
+
+  function handleKeydown(event: KeyboardEvent) {
+    const target = event.target as HTMLElement | null;
+    if (event.code !== 'Space' || target?.closest('input, select, textarea, button')) return;
+    event.preventDefault();
+    togglePlayback();
+  }
+
   const patterns = [
     { id: 'forward', icon: '→', label: 'Forward' },
     { id: 'backward', icon: '←', label: 'Backward' },
@@ -257,6 +289,8 @@
     {id: 'distortion' as EffectParam, label: 'Distortion', value: distortion, min: 0, max: 50, step: 1}
   ]);
 </script>
+
+<svelte:window onkeydown={handleKeydown} />
 
 <main class="min-h-screen bg-gray-100">
   <div id="pageContainer" class="container mx-auto p-4">
@@ -291,13 +325,22 @@
         </div>
 
         <!-- Matrix Grid -->
-        <div class="aspect-square w-full overflow-hidden border border-gray-300 bg-white rounded-lg shadow-md">
+        <div class="flex aspect-square w-full overflow-hidden border border-gray-300 bg-white rounded-lg shadow-md">
+          <div
+            class="grid shrink-0 bg-gray-50 border-r border-gray-300 text-[10px] leading-none text-gray-500 select-none"
+            style="grid-template-rows: repeat({matrixSize}, 1fr); width: 2.5rem;"
+            aria-hidden="true"
+          >
+            {#each rowLabels as label}
+              <span class="flex items-center justify-end pr-1 overflow-hidden">{label}</span>
+            {/each}
+          </div>
           <div 
             id="matrix" 
             role="grid"
             tabindex="-1"
             aria-label="Sound grid"
-            class="grid w-full h-full select-none"
+            class="grid flex-1 h-full select-none"
             style="grid-template-columns: repeat({matrixSize}, 1fr); grid-auto-rows: 1fr;"
             onmousemove={handleDrag}
             onmouseup={handleDragEnd}
@@ -460,7 +503,7 @@
 
 <style>
   .gridButton {
-    border: 0.5px solid rgb(0, 0, 0);
+    border: 0.5px solid rgba(0, 0, 0, 0.15);
     width: 100%;
     height: 100%;
     padding: 0;
@@ -470,6 +513,14 @@
     -webkit-user-select: none;
     user-select: none;
     transition: all 0.1s ease;
+  }
+
+  .beat-line {
+    border-left: 1px solid rgba(0, 0, 0, 0.4);
+  }
+
+  .octave-line {
+    border-top: 1px solid rgba(0, 0, 0, 0.4);
   }
 
   @keyframes pulse {
