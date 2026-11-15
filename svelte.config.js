@@ -10,7 +10,8 @@ const config = {
 	kit: {
 		adapter: adapter(),
 		// Registered by hand in src/lib/pwa.svelte.ts so the page can offer "Reload" on updates
-		serviceWorker: { register: false }
+		serviceWorker: { register: false },
+		prerender: { entries: ['*', '/sitemap.xml'] }
 	}
 };
 

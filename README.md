@@ -93,6 +93,7 @@ Open the printed address (usually http://localhost:5173), click the grid to draw
 | `bun run preview` | Serve the production build locally (this is where the service worker runs) |
 | `bun run check` | Type-check Svelte and TypeScript |
 | `bun test` | Run the unit tests |
+| `bun run audit:seo` | Check every built page: title, description, canonical, Open Graph, h1, JSON-LD and sitemap (run `bun run build` first) |
 | `bun run generate-impulse` | Regenerate the reverb impulse-response WAV files |
 
 ## Using the app
@@ -178,10 +179,11 @@ src/
 │   ├── grain-worklet.ts    Reverse and pitch-shift delay worklet
 │   ├── shortcuts.ts        Keyboard shortcuts (one list drives the UI and help)
 │   ├── help.ts · tour.ts   Help text and the guided tour steps
+│   ├── seo.ts · examples.ts  Titles, descriptions, canonical URLs, JSON-LD and the example pages' metadata
 │   ├── pwa.svelte.ts       Service worker registration, install and update state
 │   └── components/         shadcn-svelte primitives and the app's own components
 ├── service-worker.ts       Offline caching
-└── routes/                 The single page
+└── routes/                 The editor (/), the example songs (/examples/…) and the sitemap
 static/                     Manifest, icons, reverb impulse responses
 tests/                      Unit tests
 ```
@@ -193,6 +195,15 @@ DrawAudio is a progressive web app. After the first visit, a service worker keep
 - **Install.** Use your browser's install option or the **Install** button in the top bar. On iPhone and iPad: Share → **Add to Home Screen**.
 - **Updates.** When a new version is deployed, a banner offers **Reload**. Your song is autosaved, and an update never replaces code in the middle of a song.
 - The service worker is disabled in `bun run dev`. Use `bun run build && bun run preview` to try it.
+
+## SEO
+
+The editor is a canvas app, so the site also ships real content pages that search engines can read:
+
+- **`/`** has a descriptive title and description, one `h1`, a plain-language About section and `WebApplication` structured data.
+- **`/examples/`** and **`/examples/<song>/`** give each of the 20 example songs its own page with a piano-roll preview, key facts and an *Open in DrawAudio* link (`/?song=<id>`).
+- A **sitemap** is generated at build time (`/sitemap.xml`), with a canonical URL, Open Graph and Twitter tags on every page, and a 1200×630 social image.
+- `bun run audit:seo` checks all of this against the built site and fails the build pipeline if a page regresses.
 
 ## Deployment
 

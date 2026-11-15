@@ -18,7 +18,8 @@
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
     "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
     "generate-impulse": "ts-node --esm scripts/generate-impulse.ts",
-    "test": "bun test"
+    "test": "bun test",
+    "audit:seo": "bun scripts/audit-seo.ts"
   },
   "devDependencies": {
     "@internationalized/date": "^3.12.0",

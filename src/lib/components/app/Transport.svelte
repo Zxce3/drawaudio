@@ -49,7 +49,7 @@
 <header class="flex flex-wrap items-center gap-x-4 gap-y-2 border-b px-3 py-2">
   <div class="flex items-center gap-2 pr-1">
     <Music class="text-primary size-5" />
-    <span class="text-lg font-semibold tracking-tight">Draw<span class="text-primary">Audio</span></span>
+    <h1 class="text-lg font-semibold tracking-tight">Draw<span class="text-primary">Audio</span><span class="sr-only"> – free online music maker and step sequencer</span></h1>
   </div>
 
   <dl class="bg-card hidden gap-4 rounded-md border px-3 py-1 font-mono text-xs md:flex" aria-label="Playback position" data-guide="position">

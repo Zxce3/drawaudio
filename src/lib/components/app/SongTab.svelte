@@ -86,7 +86,7 @@
 
   <section class="space-y-2">
     <div class="flex items-center gap-1.5">
-      <h3 class="text-sm font-medium">Audio</h3>
+      <h2 class="text-sm font-medium">Audio</h2>
       <HelpTip id="Audio" label="Audio" />
     </div>
     <Button variant="outline" class="w-full gap-2" onclick={renderLoop} disabled={ui.rendering || ui.recording}>
@@ -97,7 +97,7 @@
 
   <section class="space-y-2">
     <div class="flex items-center gap-1.5">
-      <h3 class="text-sm font-medium">MIDI</h3>
+      <h2 class="text-sm font-medium">MIDI</h2>
       <HelpTip id="MIDI" label="MIDI" />
     </div>
     <div class="grid grid-cols-2 gap-2">
@@ -110,13 +110,13 @@
 
   <section class="space-y-2">
     <div class="flex items-center gap-1.5">
-      <h3 class="text-sm font-medium">Example songs</h3>
+      <h2 class="text-sm font-medium">Example songs</h2>
       <HelpTip id="Example songs" label="Example songs" />
     </div>
     {#each [16, 32, 64] as size}
-      <h4 class="text-muted-foreground pt-1 text-xs font-medium tracking-wide uppercase">
+      <h3 class="text-muted-foreground pt-1 text-xs font-medium tracking-wide uppercase">
         {size}×{size} · {size / 16} {size === 16 ? 'bar' : 'bars'}
-      </h4>
+      </h3>
       <ul class="space-y-1">
         {#each EXAMPLE_SONGS.filter((e) => e.size === size) as example (example.id)}
           <li>
@@ -136,7 +136,7 @@
 
   <section class="space-y-2">
     <div class="flex items-center gap-1.5">
-      <h3 class="text-sm font-medium">My songs</h3>
+      <h2 class="text-sm font-medium">My songs</h2>
       <HelpTip id="My songs" label="My songs" />
     </div>
     {#if songs.length === 0}

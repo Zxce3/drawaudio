@@ -10,16 +10,12 @@
   import { handleShortcut } from '$lib/shortcuts';
   import { decodeShare, sanitizeSong, toCompact } from '$lib/storage';
   import { EXAMPLE_SONGS } from '$lib/songs';
-  import { updateSeo } from '$lib/seo';
+  import { base } from '$app/paths';
+  import Seo from '$lib/components/Seo.svelte';
+  import { HOME_TITLE, HOME_DESCRIPTION, FEATURES, webApplicationLd, websiteLd } from '$lib/seo';
 
   const AUTOSAVE_KEY = 'drawaudio:autosave';
   const VIZ_KEY = 'drawaudio:viz2';
-
-  updateSeo({
-    title: 'DrawAudio - Create Music by Drawing',
-    description:
-      'Draw notes on a grid to make music in your browser. Multi-track sequencer with synth sounds, effects, scales, MIDI export and shareable links.'
-  });
 
   let ready = $state(false);
 
@@ -39,8 +35,13 @@
     (async () => {
       try {
         const shared = location.hash.match(/^#s=(.+)$/)?.[1];
+        const example = EXAMPLE_SONGS.find((e) => e.id === new URLSearchParams(location.search).get('song'));
         if (shared) replaceSong(await decodeShare(shared));
-        else {
+        else if (example) {
+          // Arrived from an example page: open that song, and keep the address clean
+          replaceSong(example.create());
+          history.replaceState(null, '', location.pathname);
+        } else {
           const saved = localStorage.getItem(AUTOSAVE_KEY);
           // First visit: start with an example so there is something to hear
           replaceSong(saved ? sanitizeSong(JSON.parse(saved)) : EXAMPLE_SONGS[0].create());
@@ -102,6 +103,8 @@
   const onkeydown = handleShortcut;
 </script>
 
+<Seo title={HOME_TITLE} description={HOME_DESCRIPTION} path="/" jsonLd={[webApplicationLd(), websiteLd()]} />
+
 <svelte:window {onkeydown} />
 
 <div class="flex h-dvh min-h-0 flex-col">
@@ -114,3 +117,22 @@
 </div>
 <Toast />
 <GuideTour />
+
+<!-- Plain-language description for search engines and screen-reader users (the app itself is a canvas and controls) -->
+<aside class="sr-only" aria-labelledby="about-heading">
+  <h2 id="about-heading">About DrawAudio</h2>
+  <p>
+    DrawAudio is a free online music maker and step sequencer. Draw notes on a grid and the app plays them back as a song with a built-in multi-track
+    synthesizer. It runs entirely in your browser, works offline once loaded, and needs no account.
+  </p>
+  <h2>What you can do</h2>
+  <ul>
+    {#each FEATURES as feature}
+      <li>{feature}</li>
+    {/each}
+  </ul>
+  <h2>Example songs</h2>
+  <p>
+    Browse the <a href="{base}/examples/">20 example songs</a> for ideas: lo-fi, synthwave, chiptune, ambient and more, each one opens in the editor.
+  </p>
+</aside>

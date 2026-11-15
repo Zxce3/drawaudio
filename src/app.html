@@ -21,6 +21,7 @@
 				align-items: center; justify-content: center; gap: 1.25rem; background: #09090b; color: #fafafa;
 				font: 500 1rem/1.4 ui-sans-serif, system-ui, sans-serif; transition: opacity 0.35s ease;
 			}
+			.no-splash #splash { display: none; }
 			#splash.hide { opacity: 0; pointer-events: none; }
 			#splash .logo { font-size: 1.6rem; font-weight: 600; letter-spacing: -0.02em; }
 			#splash .logo b { color: #38bdf8; font-weight: 600; }
@@ -41,9 +42,14 @@
 			<div class="logo">Draw<b>Audio</b></div>
 			<div class="bars" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
 			<div class="status" id="splash-status">Loading…</div>
-			<noscript><style>#splash { display: none; }</style><p style="position:fixed;top:1rem;left:1rem;color:#fafafa">DrawAudio needs JavaScript to run.</p></noscript>
+			<noscript>
+				<style>#splash { display: none; }</style>
+				<p style="position:fixed;top:0;left:0;right:0;z-index:101;margin:0;padding:.6rem 1rem;background:#18181b;color:#fafafa;font:.9rem/1.4 ui-sans-serif,system-ui,sans-serif;text-align:center">The DrawAudio editor needs JavaScript. You can still read about it and browse the example songs.</p>
+			</noscript>
 		</div>
 		<script>
+			// The loading screen is for the editor; content pages (like /examples/) render straight away
+			if (/\/examples(\/|$)/.test(location.pathname)) document.documentElement.classList.add('no-splash');
 			// If startup takes a while (slow network), say so instead of looking frozen
 			setTimeout(function () {
 				var s = document.getElementById('splash-status');
