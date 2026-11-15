@@ -18,7 +18,9 @@
     { value: 'pingpong', label: 'Ping Pong' },
     { value: 'mono', label: 'Mono' },
     { value: 'stereo', label: 'Stereo' },
-    { value: 'slapback', label: 'Slapback' }
+    { value: 'slapback', label: 'Slapback' },
+    { value: 'reverse', label: 'Reverse' },
+    { value: 'pitch', label: 'Pitch Shift' }
   ];
   const divisions = [
     { value: '1/4', label: '1/4' },
@@ -46,6 +48,12 @@
       <Label for="delay-sync" class="text-muted-foreground text-xs">Sync to tempo</Label>
       <Switch id="delay-sync" bind:checked={fx.delaySync} onCheckedChange={commit} />
     </div>
+    {#if fx.delayMode === 'pitch'}
+      <ParamSlider label="Pitch per repeat" bind:value={fx.delayPitch} min={-12} max={12} step={1} format={(v) => `${v > 0 ? '+' : ''}${v} st`} oncommit={commit} />
+    {/if}
+    {#if fx.delayMode === 'reverse'}
+      <p class="text-muted-foreground text-xs">Plays each delay window backwards. Time sets the window length (up to 1.5 s).</p>
+    {/if}
     {#if fx.delaySync}
       <OptionGrid label="Delay note value" cols={4} options={divisions} value={fx.delayDivision} onchange={(v) => { fx.delayDivision = v as DelayDivision; commit(); }} />
     {:else}
@@ -72,6 +80,26 @@
   <Section title="Ring mod" bind:enabled={fx.ringEnabled} onchange={commit} open={false}>
     <ParamSlider label="Frequency" bind:value={fx.ringFreq} min={20} max={2000} step={5} format={(v) => `${v} Hz`} oncommit={commit} />
     <ParamSlider label="Mix" bind:value={fx.ringMix} min={0} max={1} format={pct} oncommit={commit} />
+  </Section>
+
+  <Section title="Sidechain" bind:enabled={fx.sidechainEnabled} onchange={commit} open={false}>
+    <p class="text-muted-foreground text-xs">Ducks the whole mix on every pulse, for a pumping, kick-driven feel.</p>
+    <OptionGrid label="Pulse rate" cols={4} options={divisions} value={fx.sidechainDivision} onchange={(v) => { fx.sidechainDivision = v as DelayDivision; commit(); }} />
+    <div class="grid grid-cols-2 gap-x-4">
+      <ParamSlider label="Amount" bind:value={fx.sidechainAmount} min={0} max={1} format={pct} oncommit={commit} />
+      <ParamSlider label="Release" bind:value={fx.sidechainRelease} min={0.03} max={0.6} format={(v) => `${Math.round(v * 1000)} ms`} oncommit={commit} />
+    </div>
+  </Section>
+
+  <Section title="Tape" bind:enabled={fx.tapeEnabled} onchange={commit} open={false}>
+    <ParamSlider label="Wow & flutter" bind:value={fx.tapeWow} min={0} max={1} format={pct} oncommit={commit} />
+    <ParamSlider label="Saturation" bind:value={fx.tapeSaturation} min={0} max={1} format={pct} oncommit={commit} />
+    <ParamSlider label="Hiss" bind:value={fx.tapeHiss} min={0} max={1} format={pct} oncommit={commit} />
+  </Section>
+
+  <Section title="Vinyl" bind:enabled={fx.vinylEnabled} onchange={commit} open={false}>
+    <ParamSlider label="Crackle" bind:value={fx.vinylCrackle} min={0} max={1} format={pct} oncommit={commit} />
+    <ParamSlider label="Warmth (high cut)" bind:value={fx.vinylWarmth} min={0} max={1} format={pct} oncommit={commit} />
   </Section>
 
   <Section title="Equalizer" open={false}>

@@ -1,5 +1,6 @@
-export type Waveform = 'sine' | 'sawtooth' | 'triangle' | 'square' | 'pulse';
-export type PlaybackPattern = 'forward' | 'backward' | 'bounce' | 'random';
+export type Waveform = 'sine' | 'sawtooth' | 'triangle' | 'square' | 'pulse' | 'wavetable';
+export type WavetableName = 'organ' | 'vocal' | 'glass' | 'sweep';
+export type PlaybackPattern = 'forward' | 'backward' | 'bounce' | 'columns' | 'random';
 export type ImpulseType = 'reverb' | 'guitar' | 'drum';
 
 export const GRID_SIZES = [8, 16, 32, 64] as const;
@@ -7,13 +8,15 @@ export const TIME_SIGNATURES = [2, 3, 4, 5, 6, 7] as const; // beats per bar, x/
 
 export type ArpMode = 'off' | 'up' | 'down' | 'updown' | 'random' | 'pedal' | 'converge' | 'diverge';
 export type ChordType = 'triad' | '7th' | '9th' | 'add9' | 'sus2' | 'sus4' | 'power' | 'octave';
-export type DelayMode = 'pingpong' | 'mono' | 'stereo' | 'slapback';
+export type DelayMode = 'pingpong' | 'mono' | 'stereo' | 'slapback' | 'reverse' | 'pitch';
 export type DelayDivision = '1/4' | '1/8' | '1/16' | '1/8d';
 
 /** Per-track voice and sequencing settings */
 export interface SoundParams {
   waveform: Waveform;
   pulseWidth: number; // 0.05 - 0.95 (pulse only)
+  wavetable: WavetableName;
+  wavetablePos: number; // 0 - 1 morph position
   attack: number; // seconds
   decay: number;
   sustain: number; // 0 - 1
@@ -57,7 +60,9 @@ export interface SoundParams {
 
 /** Numeric limits used to validate untrusted input */
 export const PARAM_RANGES: Record<string, [number, number]> = {
-  pulseWidth: [0.05, 0.95], attack: [0, 2], decay: [0, 2], sustain: [0, 1], release: [0, 4],
+  pulseWidth: [0.05, 0.95], wavetablePos: [0, 1], delayPitch: [-12, 12],
+  tapeWow: [0, 1], tapeSaturation: [0, 1], tapeHiss: [0, 1], vinylCrackle: [0, 1], vinylWarmth: [0, 1],
+  sidechainAmount: [0, 1], sidechainRelease: [0.03, 0.6], attack: [0, 2], decay: [0, 2], sustain: [0, 1], release: [0, 4],
   cutoff: [100, 20000], resonance: [0, 20], hpCutoff: [20, 4000], hpResonance: [0, 20],
   filterEnvAmount: [0, 1], pitchEnvSemitones: [-24, 24], pitchEnvTime: [0.005, 1],
   subLevel: [0, 1], noiseLevel: [0, 1], unison: [1, 8], detune: [0, 100], fmAmount: [0, 1], fmRatio: [0.5, 8],
@@ -69,10 +74,12 @@ export const PARAM_RANGES: Record<string, [number, number]> = {
 };
 
 export const PARAM_CHOICES: Record<string, readonly string[]> = {
-  waveform: ['sine', 'sawtooth', 'triangle', 'square', 'pulse'],
+  waveform: ['sine', 'sawtooth', 'triangle', 'square', 'pulse', 'wavetable'],
+  wavetable: ['organ', 'vocal', 'glass', 'sweep'],
+  sidechainDivision: ['1/4', '1/8', '1/16', '1/8d'],
   arpMode: ['off', 'up', 'down', 'updown', 'random', 'pedal', 'converge', 'diverge'],
   chordType: ['triad', '7th', '9th', 'add9', 'sus2', 'sus4', 'power', 'octave'],
-  delayMode: ['pingpong', 'mono', 'stereo', 'slapback'],
+  delayMode: ['pingpong', 'mono', 'stereo', 'slapback', 'reverse', 'pitch'],
   delayDivision: ['1/4', '1/8', '1/16', '1/8d'],
   impulse: ['reverb', 'guitar', 'drum']
 };
@@ -98,6 +105,7 @@ export interface Effects {
   delayMode: DelayMode;
   delaySync: boolean;
   delayDivision: DelayDivision;
+  delayPitch: number; // semitones, pitch-shift delay mode
   delayTime: number; // seconds (when not synced)
   delayFeedback: number; // 0 - 0.9
   delayMix: number; // 0 - 1
@@ -110,6 +118,17 @@ export interface Effects {
   ringEnabled: boolean;
   ringFreq: number;
   ringMix: number;
+  tapeEnabled: boolean;
+  tapeWow: number;
+  tapeSaturation: number;
+  tapeHiss: number;
+  vinylEnabled: boolean;
+  vinylCrackle: number;
+  vinylWarmth: number;
+  sidechainEnabled: boolean;
+  sidechainAmount: number;
+  sidechainRelease: number; // seconds
+  sidechainDivision: DelayDivision;
   eqLow: number; // dB
   eqMid: number;
   eqHigh: number;
@@ -133,6 +152,8 @@ export interface Song {
 export const DEFAULT_SOUND: SoundParams = {
   waveform: 'sine',
   pulseWidth: 0.5,
+  wavetable: 'organ',
+  wavetablePos: 0,
   attack: 0.01,
   decay: 0.1,
   sustain: 0.6,
@@ -177,6 +198,7 @@ export const DEFAULT_EFFECTS: Effects = {
   delayMode: 'pingpong',
   delaySync: false,
   delayDivision: '1/8',
+  delayPitch: 12,
   delayTime: 0.3,
   delayFeedback: 0.3,
   delayMix: 0.3,
@@ -189,6 +211,17 @@ export const DEFAULT_EFFECTS: Effects = {
   ringEnabled: false,
   ringFreq: 300,
   ringMix: 0.5,
+  tapeEnabled: false,
+  tapeWow: 0.3,
+  tapeSaturation: 0.4,
+  tapeHiss: 0.2,
+  vinylEnabled: false,
+  vinylCrackle: 0.4,
+  vinylWarmth: 0.5,
+  sidechainEnabled: false,
+  sidechainAmount: 0.6,
+  sidechainRelease: 0.2,
+  sidechainDivision: '1/4',
   eqLow: 0,
   eqMid: 0,
   eqHigh: 0

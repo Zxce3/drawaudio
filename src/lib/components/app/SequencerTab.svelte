@@ -8,11 +8,12 @@
 
   const p = $derived(activeTrack().params);
   const pct = (v: number) => `${Math.round(v * 100)}%`;
-  const waves = ['sine', 'sawtooth', 'triangle', 'square', 'pulse'].map((w) => ({ value: w, label: w }));
+  const waves = ['sine', 'sawtooth', 'triangle', 'square', 'pulse', 'wavetable'].map((w) => ({ value: w, label: w }));
   const directions = [
     { value: 'forward', label: 'Forward →' },
     { value: 'backward', label: 'Backward ←' },
     { value: 'bounce', label: 'Bounce ↔' },
+    { value: 'columns', label: 'Columns ▥' },
     { value: 'random', label: 'Random ⟳' }
   ];
   const lengths = ['1', '2', '3', '4', '5'].map((v, i) => ({ value: v, label: ['1/16', '1/8', '1/4', '1/2', '1 bar'][i] }));
@@ -29,9 +30,9 @@
 
 <div>
   <Section title="Waveform">
-    <OptionGrid label="Waveform" cols={5} options={waves} value={p.waveform}
+    <OptionGrid label="Waveform" cols={6} options={waves} value={p.waveform}
       onchange={(v) => { p.waveform = v as Waveform; commit(); }}>
-      {#snippet item(option)}<WaveIcon wave={option.value} /><span class="text-[10px] uppercase">{option.value.slice(0, 3)}</span>{/snippet}
+      {#snippet item(option)}<WaveIcon wave={option.value} /><span class="text-[10px] uppercase">{option.value === 'wavetable' ? 'WT' : option.value.slice(0, 3)}</span>{/snippet}
     </OptionGrid>
     {#if p.waveform === 'pulse'}
       <ParamSlider label="Pulse width" bind:value={p.pulseWidth} min={0.05} max={0.95} format={pct} oncommit={commit} />

@@ -80,3 +80,32 @@ test('sanitize validates new voice and effect settings', () => {
   expect(song.tracks[0].params.chordEnabled).toBe(false);
   expect(song.tracks[0].params.unison).toBe(3);
 });
+
+import { filterResponse } from '../src/lib/filter';
+import { wavetableHarmonics, wavetableShape } from '../src/lib/wavetables';
+
+test('lowpass response falls off above the cutoff', () => {
+  const r = filterResponse({ lpEnabled: true, cutoff: 1000, resonance: 0, hpEnabled: false, hpCutoff: 20, hpResonance: 0 });
+  const at = (f: number) => r.reduce((a, b) => (Math.abs(b.freq - f) < Math.abs(a.freq - f) ? b : a)).db;
+  expect(at(100)).toBeGreaterThan(-1);
+  expect(at(10000)).toBeLessThan(-30);
+});
+
+test('wavetables are normalised and morph between frames', () => {
+  for (const table of ['organ', 'vocal', 'glass', 'sweep'] as const) {
+    const h = wavetableHarmonics(table, 0.5);
+    expect(Math.max(...h)).toBeCloseTo(1, 5);
+    const a = wavetableShape(table, 0);
+    const b = wavetableShape(table, 1);
+    expect(a.some((v, i) => Math.abs(v - b[i]) > 0.05)).toBe(true);
+  }
+});
+
+test('sanitize accepts new playback and delay modes', () => {
+  const s = sanitizeSong({ pattern: 'columns', effects: { delayMode: 'reverse', sidechainDivision: '1/16' }, tracks: [{ params: { waveform: 'wavetable', wavetable: 'vocal' } }] });
+  expect(s.pattern).toBe('columns');
+  expect(s.effects.delayMode).toBe('reverse');
+  expect(s.effects.sidechainDivision).toBe('1/16');
+  expect(s.tracks[0].params.waveform).toBe('wavetable');
+  expect(s.tracks[0].params.wavetable).toBe('vocal');
+});

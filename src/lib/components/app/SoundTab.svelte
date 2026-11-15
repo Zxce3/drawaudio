@@ -3,9 +3,12 @@
   import ParamSlider from './ParamSlider.svelte';
   import Section from './Section.svelte';
   import EnvelopeGraph from './EnvelopeGraph.svelte';
+  import FilterGraph from './FilterGraph.svelte';
+  import WavetablePreview from './WavetablePreview.svelte';
+  import { WAVETABLES } from '$lib/wavetables';
   import { Label } from '$lib/components/ui/label';
   import { activeTrack, applyPreset, commit } from '$lib/song.svelte';
-  import { SOUND_PRESETS } from '$lib/types';
+  import { SOUND_PRESETS, type WavetableName } from '$lib/types';
 
   const track = $derived(activeTrack());
   const p = $derived(track.params);
@@ -34,6 +37,20 @@
   <Section title="Pitch envelope" bind:enabled={p.pitchEnvEnabled} onchange={commit} open={false}>
     <ParamSlider label="Amount" bind:value={p.pitchEnvSemitones} min={-24} max={24} step={1} format={(v) => `${v > 0 ? '+' : ''}${v} st`} oncommit={commit} />
     <ParamSlider label="Time" bind:value={p.pitchEnvTime} min={0.005} max={1} format={sec} oncommit={commit} />
+  </Section>
+
+  <Section title="Wavetable" open={p.waveform === 'wavetable'}>
+    <WavetablePreview table={p.wavetable} position={p.wavetablePos} />
+    <Choice label="Wavetable" class="w-full" value={p.wavetable} options={WAVETABLES}
+      onchange={(v) => { p.wavetable = v as WavetableName; commit(); }} />
+    <ParamSlider label="Morph position" bind:value={p.wavetablePos} min={0} max={1} format={pct} oncommit={commit} />
+    {#if p.waveform !== 'wavetable'}
+      <p class="text-muted-foreground text-xs">Pick the WT waveform on the Seq tab to play this table.</p>
+    {/if}
+  </Section>
+
+  <Section title="Filter response">
+    <FilterGraph settings={{ lpEnabled: p.lpEnabled, cutoff: p.cutoff, resonance: p.resonance, hpEnabled: p.hpEnabled, hpCutoff: p.hpCutoff, hpResonance: p.hpResonance }} />
   </Section>
 
   <Section title="Lowpass filter" bind:enabled={p.lpEnabled} onchange={commit}>

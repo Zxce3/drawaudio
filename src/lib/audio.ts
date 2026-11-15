@@ -1,5 +1,7 @@
 import { base } from '$app/paths';
 import { getRowPitch } from './scales';
+import { GRAIN_WORKLET_NAME, GRAIN_WORKLET_SOURCE } from './grain-worklet';
+import { wavetableHarmonics } from './wavetables';
 import type { ChordType, DelayDivision, Effects, ImpulseType, Song, SoundParams, Track } from './types';
 
 const DIVISION_BEATS: Record<DelayDivision, number> = { '1/4': 1, '1/8': 0.5, '1/16': 0.25, '1/8d': 0.75 };
@@ -60,6 +62,23 @@ export class AudioEngine {
   private ringOsc!: OscillatorNode;
   private ringMix!: GainNode;
   private ringDry!: GainNode;
+  private grain: AudioWorkletNode | null = null;
+  private grainIn!: GainNode;
+  private grainWet!: GainNode;
+  private grainFeedback!: GainNode;
+  private duck!: GainNode;
+  private tapeDry!: GainNode;
+  private tapeWet!: GainNode;
+  private tapeDelay!: DelayNode;
+  private tapeSat!: WaveShaperNode;
+  private tapeTone!: BiquadFilterNode;
+  private tapeLfo!: OscillatorNode;
+  private wowDepth!: GainNode;
+  private flutterDepth!: GainNode;
+  private hissGain!: GainNode;
+  private crackleGain!: GainNode;
+  private schedSteps = 0;
+  private waveCache = new Map<string, PeriodicWave>();
   private reverbKey = '';
   private lastFreq = new Map<string, number>();
   private arpIndex = new Map<string, number>();
@@ -171,6 +190,13 @@ export class AudioEngine {
     r.connect(this.delayPans.r).connect(this.delayMix);
     this.delayMix.connect(this.compressor);
 
+    // Reverse / pitch-shift delay runs in an AudioWorklet (optional: falls back to mono)
+    this.grainIn = ctx.createGain();
+    this.grainIn.gain.value = 0;
+    this.grainWet = ctx.createGain();
+    this.grainFeedback = ctx.createGain();
+    this.delayIn.connect(this.grainIn);
+
     // Stereo spread: a short delayed copy panned right
     this.spreadDelay = ctx.createDelay(0.1);
     this.spreadDelay.delayTime.value = 0.018;
@@ -192,20 +218,95 @@ export class AudioEngine {
     this.eqHigh.connect(this.ringDry).connect(this.chorusDry).connect(this.master);
     this.eqHigh.connect(this.ringGain).connect(this.ringMix).connect(this.master);
     this.eqHigh.connect(this.chorusDelay).connect(this.chorusMix).connect(this.master);
-    this.master.connect(this.compressor);
-    this.master.connect(this.spreadDelay).connect(this.spreadGain).connect(this.spreadPan).connect(this.compressor);
+    // Tape stage (wow/flutter, saturation, warmth), then sidechain ducking
+    this.tapeDry = ctx.createGain();
+    this.tapeWet = ctx.createGain();
+    this.tapeWet.gain.value = 0;
+    this.tapeDelay = ctx.createDelay(0.1);
+    this.tapeDelay.delayTime.value = 0.012;
+    this.tapeSat = ctx.createWaveShaper();
+    this.tapeTone = ctx.createBiquadFilter();
+    this.tapeTone.type = 'lowpass';
+    this.tapeTone.frequency.value = 20000;
+    this.wowDepth = ctx.createGain();
+    this.flutterDepth = ctx.createGain();
+    this.tapeLfo = ctx.createOscillator();
+    this.tapeLfo.frequency.value = 0.8;
+    const flutterLfo = ctx.createOscillator();
+    flutterLfo.frequency.value = 7.3;
+    this.tapeLfo.connect(this.wowDepth).connect(this.tapeDelay.delayTime);
+    flutterLfo.connect(this.flutterDepth).connect(this.tapeDelay.delayTime);
+    this.tapeLfo.start();
+    flutterLfo.start();
+    this.duck = ctx.createGain();
+    const tapeOut = ctx.createGain();
+    this.master.connect(this.tapeDry).connect(tapeOut);
+    this.master.connect(this.tapeDelay).connect(this.tapeSat).connect(this.tapeTone).connect(this.tapeWet).connect(tapeOut);
+    tapeOut.connect(this.duck);
+    this.duck.connect(this.compressor);
+    this.duck.connect(this.spreadDelay).connect(this.spreadGain).connect(this.spreadPan).connect(this.compressor);
+
+    // Tape hiss and vinyl crackle are constant noise sources mixed in after the tape stage
+    this.hissGain = ctx.createGain();
+    this.hissGain.gain.value = 0;
+    this.crackleGain = ctx.createGain();
+    this.crackleGain.gain.value = 0;
+    const hissSource = ctx.createBufferSource();
+    hissSource.buffer = this.makeNoise(ctx);
+    hissSource.loop = true;
+    const hissFilter = ctx.createBiquadFilter();
+    hissFilter.type = 'highpass';
+    hissFilter.frequency.value = 3500;
+    hissSource.connect(hissFilter).connect(this.hissGain).connect(this.compressor);
+    hissSource.start();
+    const crackleSource = ctx.createBufferSource();
+    crackleSource.buffer = this.makeCrackle(ctx);
+    crackleSource.loop = true;
+    crackleSource.connect(this.crackleGain).connect(this.compressor);
+    crackleSource.start();
     this.bus.connect(this.delayIn);
     this.convolver.connect(this.reverbMix).connect(this.compressor);
     this.compressor.connect(this.analyser);
     this.compressor.connect(ctx.destination);
 
     this.noiseBuffer = this.makeNoise(ctx);
+    await this.setupGrainDelay(ctx);
     await this.loadImpulses();
     this.applyEffects();
     this.syncTracks();
 
     this.worker = new Worker(new URL('./worker.ts', import.meta.url), { type: 'module' });
     this.worker.onmessage = () => this.schedule();
+  }
+
+  private async setupGrainDelay(ctx: AudioContext) {
+    try {
+      const url = URL.createObjectURL(new Blob([GRAIN_WORKLET_SOURCE], { type: 'text/javascript' }));
+      await ctx.audioWorklet.addModule(url);
+      URL.revokeObjectURL(url);
+      this.grain = new AudioWorkletNode(ctx, GRAIN_WORKLET_NAME, { numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [2] });
+      const loop = ctx.createDelay(0.1); // feedback cycles need a DelayNode
+      loop.delayTime.value = 0.01;
+      this.grainIn.connect(this.grain);
+      this.grain.connect(this.grainWet).connect(this.delayMix);
+      this.grain.connect(this.grainFeedback).connect(loop).connect(this.grain);
+    } catch (error) {
+      console.warn('Reverse and pitch-shift delay are unavailable:', error);
+      this.grain = null;
+    }
+  }
+
+  private makeCrackle(ctx: AudioContext): AudioBuffer {
+    const seconds = 6;
+    const buffer = ctx.createBuffer(1, ctx.sampleRate * seconds, ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < data.length; i++) {
+      if (Math.random() < 6 / ctx.sampleRate) {
+        const amp = (Math.random() * 2 - 1) * (0.4 + Math.random() * 0.6);
+        for (let k = 0; k < 24 && i + k < data.length; k++) data[i + k] += amp * Math.exp(-k / 5);
+      }
+    }
+    return buffer;
   }
 
   private makeNoise(ctx: AudioContext): AudioBuffer {
@@ -308,6 +409,38 @@ export class AudioEngine {
     set(this.delayPans.r.pan, width);
     set(this.delayMix.gain, e.delayEnabled ? e.delayMix : 0);
 
+    // Reverse / pitch shift use the worklet; the plain taps are muted for those modes
+    const grainMode = (mode === 'reverse' || mode === 'pitch') && this.grain !== null;
+    if (grainMode) {
+      for (const key of ['inL', 'inR', 'llFb', 'rrFb', 'lrFb', 'rlFb'] as const) set(g[key].gain, 0);
+    } else if (mode === 'reverse' || mode === 'pitch') {
+      set(g.inL.gain, 1); // worklet unavailable: behave like mono
+      set(g.llFb.gain, feedback);
+    }
+    set(this.grainIn.gain, grainMode ? 1 : 0);
+    set(this.grainWet.gain, 1);
+    set(this.grainFeedback.gain, grainMode ? feedback : 0);
+    if (this.grain) {
+      const params = this.grain.parameters;
+      params.get('time')?.setValueAtTime(Math.min(Math.max(time, 0.05), 1.5), t);
+      params.get('mode')?.setValueAtTime(mode === 'reverse' ? 0 : 1, t);
+      params.get('rate')?.setValueAtTime(2 ** (e.delayPitch / 12), t);
+    }
+
+    // Tape, vinyl and sidechain
+    const tape = e.tapeEnabled;
+    const vinyl = e.vinylEnabled;
+    const wet = tape || vinyl ? 1 : 0;
+    set(this.tapeWet.gain, wet);
+    set(this.tapeDry.gain, 1 - wet);
+    set(this.wowDepth.gain, tape ? e.tapeWow * 0.0035 : 0);
+    set(this.flutterDepth.gain, tape ? e.tapeWow * 0.0004 : 0);
+    this.tapeSat.curve = this.saturationCurve(tape ? e.tapeSaturation : 0);
+    set(this.tapeTone.frequency, vinyl ? 20000 - e.vinylWarmth * 16000 : 20000);
+    set(this.hissGain.gain, tape ? e.tapeHiss * 0.025 : 0);
+    set(this.crackleGain.gain, vinyl ? e.vinylCrackle * 0.35 : 0);
+    if (!e.sidechainEnabled) this.duck.gain.setTargetAtTime(1, t, 0.02);
+
     // Reverb
     set(this.reverbMix.gain, e.reverbEnabled ? e.reverbMix : 0);
     this.updateReverbBuffer(e.impulse, e.reverbDecay);
@@ -349,6 +482,15 @@ export class AudioEngine {
     this.convolver.buffer = buffer;
   }
 
+  private saturationCurve(amount: number): Float32Array<ArrayBuffer> | null {
+    if (amount <= 0) return null;
+    const n = 1024;
+    const curve = new Float32Array(n);
+    const drive = 1 + amount * 4;
+    for (let i = 0; i < n; i++) curve[i] = Math.tanh(((i * 2) / n - 1) * drive) / Math.tanh(drive);
+    return curve;
+  }
+
   private distortionCurve(amount: number): Float32Array<ArrayBuffer> | null {
     if (amount <= 0) return null;
     const n = 1024;
@@ -384,6 +526,7 @@ export class AudioEngine {
     this.playing = true;
     this.nextStep = this.song.pattern === 'backward' ? this.song.gridSize - 1 : 0;
     this.reverse = false;
+    this.schedSteps = 0;
     this.nextTime = ctx.currentTime + 0.06;
     this.startTime = this.nextTime;
     this.queue = [];
@@ -404,11 +547,25 @@ export class AudioEngine {
     if (!this.playing || !this.ctx) return;
     const stepDuration = 60 / this.song.tempo / 4; // sixteenth notes
     while (this.nextTime < this.ctx.currentTime + 0.12) {
+      this.pumpSidechain(this.nextTime);
       this.playColumn(this.nextStep, this.nextTime, stepDuration);
       this.queue.push({ step: this.nextStep, time: this.nextTime });
       this.nextStep = this.advance(this.nextStep);
       this.nextTime += stepDuration;
     }
+  }
+
+  /** Duck the mix on each sidechain beat, like a kick-driven compressor */
+  private pumpSidechain(time: number) {
+    const e = this.song.effects;
+    const index = this.schedSteps++;
+    if (!e.sidechainEnabled) return;
+    const every = { '1/4': 4, '1/8': 2, '1/16': 1, '1/8d': 3 }[e.sidechainDivision];
+    if (index % every !== 0) return;
+    const gain = this.duck.gain;
+    gain.cancelScheduledValues(time);
+    gain.setValueAtTime(1 - e.sidechainAmount, time);
+    gain.linearRampToValueAtTime(1, time + Math.max(e.sidechainRelease, 0.03));
   }
 
   /** Tell the UI about a step when its audio time arrives */
@@ -428,6 +585,14 @@ export class AudioEngine {
         return (step - 1 + size) % size;
       case 'random':
         return Math.floor(Math.random() * size);
+      case 'columns': {
+        // Jump to the next column that has a note on any track
+        for (let i = 1; i <= size; i++) {
+          const col = (step + i) % size;
+          if (this.song.tracks.some((t) => t.matrix.some((row) => row[col]))) return col;
+        }
+        return (step + 1) % size;
+      }
       case 'bounce':
         if (size < 2) return 0;
         if (this.reverse) {
@@ -572,8 +737,20 @@ export class AudioEngine {
     return wave;
   }
 
+  private tableWave(p: SoundParams): PeriodicWave {
+    const key = `${p.wavetable}:${Math.round(p.wavetablePos * 20)}`;
+    let wave = this.waveCache.get(key);
+    if (!wave) {
+      const imag = wavetableHarmonics(p.wavetable, Math.round(p.wavetablePos * 20) / 20);
+      wave = this.ctx!.createPeriodicWave(new Float32Array(imag.length), imag);
+      this.waveCache.set(key, wave);
+    }
+    return wave;
+  }
+
   private setWave(osc: OscillatorNode, p: SoundParams) {
     if (p.waveform === 'pulse') osc.setPeriodicWave(this.pulseWave(p.pulseWidth));
+    else if (p.waveform === 'wavetable') osc.setPeriodicWave(this.tableWave(p));
     else osc.type = p.waveform;
   }
 

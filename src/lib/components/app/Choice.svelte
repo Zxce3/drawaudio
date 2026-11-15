@@ -15,7 +15,7 @@
     class?: string;
   } = $props();
 
-  const current = $derived(options.find((o) => o.value === value)?.label ?? value);
+  const current = $derived(options.find((o) => o.value === value)?.label ?? (value || 'Choose…'));
 </script>
 
 <Select.Root type="single" {value} onValueChange={onchange}>

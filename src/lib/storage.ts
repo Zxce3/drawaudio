@@ -128,7 +128,7 @@ export function sanitizeSong(raw: unknown): Song {
     gridSize,
     beatsPerBar: Math.round(num(r.beatsPerBar, 4, 2, 7)),
     scale: typeof r.scale === 'string' && r.scale in SCALES ? r.scale : base.scale,
-    pattern: pick(r.pattern, ['forward', 'backward', 'bounce', 'random'] as const, 'forward'),
+    pattern: pick(r.pattern, ['forward', 'backward', 'bounce', 'columns', 'random'] as const, 'forward'),
     swing: num(r.swing, 0.5, 0.25, 0.75),
     humanizeTiming: num(r.humanizeTiming, 0, 0, 1),
     humanizeVelocity: num(r.humanizeVelocity, 0, 0, 1),

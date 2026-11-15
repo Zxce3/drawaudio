@@ -5,7 +5,8 @@
     sawtooth: 'M1 14 L12 2 V14 L23 2',
     triangle: 'M1 8 L6 2 L18 14 L23 8',
     square: 'M1 14 V3 H12 V14 H23 V3',
-    pulse: 'M1 14 H6 V3 H11 V14 H17 V3 H21 V14'
+    pulse: 'M1 14 H6 V3 H11 V14 H17 V3 H21 V14',
+    wavetable: 'M1 8 C3 2 5 2 7 8 S11 14 13 8 S16 4 17 8 S20 12 23 8'
   };
 </script>
 
