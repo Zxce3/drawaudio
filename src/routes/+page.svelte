@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
+  import { on } from 'svelte/events';
   import { AudioService } from '$lib/audio';
   import { SCALES } from '$lib/scales';
   import { updateSeo } from '$lib/seo';
@@ -9,6 +10,15 @@
     description: 'Draw patterns on a grid to create amazing musical sequences with this interactive audio sequencer. Experiment with different waveforms, effects, and musical scales.',
   });
   
+  // Svelte 5 registers touchstart/touchmove delegated handlers as passive, so
+  // handlers that call preventDefault() need an explicit non-passive listener.
+  function nonPassive(node: HTMLElement, handlers: Record<string, (e: any) => void>) {
+    const offs = Object.entries(handlers).map(([type, fn]) =>
+      on(node, type, (e) => { e.preventDefault(); fn(e); }, { passive: false })
+    );
+    return { destroy: () => offs.forEach((off) => off()) };
+  }
+
   type EffectParam = "delayTime" | "reverbMix" | "delayFeedback" | "distortion";
 
   let audioService = $state.raw() as AudioService;
@@ -258,20 +268,20 @@
         <div class="flex flex-wrap gap-4">
           <button 
             class="px-4 py-2 {isPlaying ? 'bg-red-500 hover:bg-red-600' : 'bg-green-500 hover:bg-green-600'} text-white rounded transition-colors"
-            on:click={togglePlayback}
+            onclick={togglePlayback}
           >
             {isPlaying ? 'Stop' : 'Play'}
           </button>
           <button 
             class="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
-            on:click={clearMatrix}
+            onclick={clearMatrix}
           >
             Clear Pattern
           </button>
           <select 
             class="px-3 py-2 border border-gray-300 rounded bg-white"
             bind:value={gridSize}
-            on:change={() => changeGridSize(gridSize)}
+            onchange={() => changeGridSize(gridSize)}
           >
             <option value={8}>8x8</option>
             <option value={16}>16x16</option>
@@ -286,12 +296,12 @@
             id="matrix" 
             class="grid w-full h-full select-none"
             style="grid-template-columns: repeat({matrixSize}, 1fr); grid-auto-rows: 1fr;"
-            on:mousemove={handleDrag}
-            on:mouseup={handleDragEnd}
-            on:mouseleave={handleDragEnd}
-            on:touchmove|preventDefault={handleDrag}
-            on:touchend={handleDragEnd}
-            on:touchcancel={handleDragEnd}
+            onmousemove={handleDrag}
+            onmouseup={handleDragEnd}
+            onmouseleave={handleDragEnd}
+            use:nonPassive={{ touchmove: handleDrag }}
+            ontouchend={handleDragEnd}
+            ontouchcancel={handleDragEnd}
           >
             {#each matrix as row, rowIndex}
               {#each row as cell, colIndex}
@@ -299,8 +309,8 @@
                   class={getGridCellClasses(rowIndex, colIndex, cell)}
                   data-row={rowIndex}
                   data-col={colIndex}
-                  on:mousedown={(e) => handleDragStart(e, rowIndex, colIndex)}
-                  on:touchstart|preventDefault={(e) => handleDragStart(e, rowIndex, colIndex)}
+                  onmousedown={(e) => handleDragStart(e, rowIndex, colIndex)}
+                  use:nonPassive={{ touchstart: (e) => handleDragStart(e, rowIndex, colIndex) }}
                 />
               {/each}
             {/each}
@@ -333,7 +343,7 @@
                 <button 
                   class="aspect-square border rounded-md cursor-pointer transition-colors
                          {waveform === type ? 'border-blue-500 bg-blue-50' : 'border-gray-300 hover:bg-gray-50'}"
-                  on:click={() => updateWaveform(type as OscillatorType)}
+                  onclick={() => updateWaveform(type as OscillatorType)}
                   aria-label={`Set waveform to ${type}`}
                 >{type}</button>
               {/each}
@@ -361,7 +371,7 @@
               <select 
                 class="w-full px-3 py-2 border border-gray-300 rounded"
                 bind:value={currentScale}
-                on:change={() => updateScale(currentScale)}
+                onchange={() => updateScale(currentScale)}
               >
                 {#each scaleOptions as scale}
                   <option value={scale}>{scale}</option>
@@ -377,7 +387,7 @@
                   <button
                     class="px-4 py-2 border rounded-md transition-colors aspect-square flex items-center justify-center text-xl
                            {playbackPattern === id ? 'bg-blue-500 text-white' : 'bg-white hover:bg-blue-100'}"
-                    on:click={() => setPattern(id as typeof playbackPattern)}
+                    onclick={() => setPattern(id as typeof playbackPattern)}
                     aria-label={label}
                   >
                     {icon}
@@ -407,7 +417,7 @@
                   min={param.min}
                   max={param.max}
                   step={param.step}
-                  on:input={(e) => {
+                  oninput={(e) => {
                     const value = parseFloat(e.currentTarget.value);
                     switch(param.id) {
                       case 'delayTime': delay = value; break;
@@ -427,7 +437,7 @@
                   <button
                     class="px-3 py-2 border rounded-md transition-colors
                            {impulseType === type ? 'bg-blue-500 text-white' : 'bg-white hover:bg-blue-100'}"
-                    on:click={() => updateImpulse(type as 'reverb' | 'guitar' | 'drum')}
+                    onclick={() => updateImpulse(type as 'reverb' | 'guitar' | 'drum')}
                   >
                     {type}
                   </button>
