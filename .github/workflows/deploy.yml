@@ -29,6 +29,10 @@ jobs:
         
       - name: Build
         run: bun run build
+        env:
+          # Optional search engine ownership tokens: set them as repository variables (see docs/search-console.md)
+          PUBLIC_GOOGLE_SITE_VERIFICATION: ${{ vars.GOOGLE_SITE_VERIFICATION }}
+          PUBLIC_BING_SITE_VERIFICATION: ${{ vars.BING_SITE_VERIFICATION }}
 
       - name: Check SEO
         run: bun run audit:seo

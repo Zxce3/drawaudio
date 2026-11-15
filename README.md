@@ -204,6 +204,7 @@ The editor is a canvas app, so the site also ships real content pages that searc
 - **`/examples/`** and **`/examples/<song>/`** give each of the 20 example songs its own page with a piano-roll preview, key facts and an *Open in DrawAudio* link (`/?song=<id>`).
 - A **sitemap** is generated at build time (`/sitemap.xml`), with a canonical URL, Open Graph and Twitter tags on every page, and a 1200×630 social image.
 - `bun run audit:seo` checks all of this against the built site and fails the build pipeline if a page regresses.
+- Going live in Google and Bing takes a few clicks, described in [docs/search-console.md](docs/search-console.md). The site reads optional verification tokens from the `GOOGLE_SITE_VERIFICATION` and `BING_SITE_VERIFICATION` repository variables.
 
 ## Deployment
 

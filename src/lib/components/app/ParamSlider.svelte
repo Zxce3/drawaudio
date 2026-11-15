@@ -28,7 +28,7 @@
   const id = `slider-${Math.random().toString(36).slice(2, 8)}`;
 </script>
 
-<div class="space-y-1.5">
+<div>
   <div class="flex items-baseline justify-between">
     <span class="flex items-center gap-1">
       <Label for={id} class="text-muted-foreground text-xs">{label}</Label>
@@ -36,5 +36,5 @@
     </span>
     <span class="text-muted-foreground font-mono text-xs tabular-nums">{format(value)}</span>
   </div>
-  <Slider {id} type="single" bind:value {min} {max} {step} onValueCommit={() => oncommit?.()} aria-label={label} />
+  <Slider class="mt-1.5" {id} type="single" bind:value {min} {max} {step} onValueCommit={() => oncommit?.()} aria-label={label} />
 </div>

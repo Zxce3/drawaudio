@@ -1,5 +1,11 @@
 <script lang="ts">
+  import * as publicEnv from '$env/static/public';
   import { SITE, resolveSeo, jsonLdScript, type PageSeo } from '$lib/seo';
+
+  // Search engine ownership tokens come from the build environment (see docs/search-console.md); they are optional
+  const env = publicEnv as unknown as Record<string, string | undefined>;
+  const googleToken = env.PUBLIC_GOOGLE_SITE_VERIFICATION?.trim();
+  const bingToken = env.PUBLIC_BING_SITE_VERIFICATION?.trim();
 
   let page: PageSeo = $props();
   const seo = $derived(resolveSeo(page));
@@ -11,6 +17,10 @@
   <meta name="robots" content={seo.robots} />
   <meta name="author" content={SITE.author} />
   <link rel="canonical" href={seo.canonical} />
+  {#if page.path === '/'}
+    {#if googleToken}<meta name="google-site-verification" content={googleToken} />{/if}
+    {#if bingToken}<meta name="msvalidate.01" content={bingToken} />{/if}
+  {/if}
 
   <!-- Open Graph -->
   <meta property="og:site_name" content={SITE.name} />

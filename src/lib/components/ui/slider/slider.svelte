@@ -21,7 +21,7 @@ get along, so we shut typescript up by casting `value` to `never`.
 	data-slot="slider"
 	{orientation}
 	class={cn(
-		"data-vertical:min-h-40 relative flex w-full touch-none items-center select-none data-disabled:opacity-50 data-vertical:h-full data-vertical:w-auto data-vertical:flex-col",
+		"data-vertical:min-h-40 relative flex h-6 w-full touch-none items-center select-none data-disabled:opacity-50 data-vertical:h-full data-vertical:w-auto data-vertical:flex-col",
 		className
 	)}
 	{...restProps}
@@ -46,7 +46,7 @@ get along, so we shut typescript up by casting `value` to `never`.
 				data-slot="slider-thumb"
 				index={thumb.index}
 				aria-label={(restProps as unknown as Record<string, string>)["aria-label"]}
-				class="border-ring ring-ring/50 relative size-3 rounded-full border bg-white transition-[color,box-shadow] after:absolute after:-inset-2 hover:ring-3 focus-visible:ring-3 focus-visible:outline-hidden active:ring-3 block shrink-0 select-none disabled:pointer-events-none disabled:opacity-50"
+				class="relative block size-6 shrink-0 rounded-full select-none before:ring-ring/50 before:absolute before:inset-[6px] before:rounded-full before:border before:border-ring before:bg-white before:transition-shadow hover:before:ring-3 focus-visible:before:ring-3 focus-visible:outline-hidden active:before:ring-3 disabled:pointer-events-none disabled:opacity-50"
 			/>
 		{/each}
 	{/snippet}
