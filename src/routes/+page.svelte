@@ -11,29 +11,29 @@
   
   type EffectParam = "delayTime" | "reverbMix" | "delayFeedback" | "distortion";
 
-  let audioService: AudioService;
-  let matrix: boolean[][] = [];
-  let matrixSize = 8; // Changed default to 8
-  let isAudioInitialized = false;
-  let isPlaying = false;
-  let activeColumn = 0;
+  let audioService = $state.raw() as AudioService;
+  let matrix: boolean[][] = $state([]);
+  let matrixSize = $state(8); // Changed default to 8
+  let isAudioInitialized = $state(false);
+  let isPlaying = $state(false);
+  let activeColumn = $state(0);
   let unsubscribe: (() => void) | null = null;
 
   // UI state variables
-  let waveform: OscillatorType = 'sine';
-  let gridSize = 8; // Changed default to 8
-  let tempo = 80;
-  let delay = 0.3;
-  let reverb = 0.3;
-  let delayGain = 0.3;
-  let distortion = 0;
-  let playbackPattern: 'forward' | 'backward' | 'bounce' | 'random' = 'forward';
+  let waveform: OscillatorType = $state('sine');
+  let gridSize = $state(8); // Changed default to 8
+  let tempo = $state(80);
+  let delay = $state(0.3);
+  let reverb = $state(0.3);
+  let delayGain = $state(0.3);
+  let distortion = $state(0);
+  let playbackPattern: 'forward' | 'backward' | 'bounce' | 'random' = $state('forward');
 
   // Add new state
-  let currentScale = 'Major';
+  let currentScale = $state('Major');
   let scaleOptions = Object.keys(SCALES);
 
-  let impulseType: 'reverb' | 'guitar' | 'drum' = 'reverb';
+  let impulseType: 'reverb' | 'guitar' | 'drum' = $state('reverb');
 
 
   // Add event options
@@ -215,19 +215,23 @@
     }
   }
 
-  $: if (matrix && audioService && isAudioInitialized) {
-    updateMatrix();
-  }
+  $effect(() => {
+    if (matrix && audioService && isAudioInitialized) {
+      updateMatrix();
+    }
+  });
 
-  $: if (tempo && audioService && isAudioInitialized) {
-    audioService.setBpm(tempo);
-  }
+  $effect(() => {
+    if (tempo && audioService && isAudioInitialized) {
+      audioService.setBpm(tempo);
+    }
+  });
 
-  $: {
+  $effect(() => {
     if (audioService?.isSequencePlaying()) {
       activeColumn = audioService.getCurrentStep();
     }
-  }
+  });
 
   const patterns = [
     { id: 'forward', icon: '→', label: 'Forward' },
@@ -236,12 +240,12 @@
     { id: 'random', icon: '⟳', label: 'Random' }
   ];
 
-  const effectControls = [
+  const effectControls = $derived([
     {id: 'delayTime' as EffectParam, label: 'Delay Time', value: delay, min: 0, max: 1, step: 0.01},
     {id: 'reverbMix' as EffectParam, label: 'Reverb Mix', value: reverb, min: 0, max: 1, step: 0.01},
     {id: 'delayFeedback' as EffectParam, label: 'Delay Feedback', value: delayGain, min: 0, max: 0.9, step: 0.01},
     {id: 'distortion' as EffectParam, label: 'Distortion', value: distortion, min: 0, max: 50, step: 1}
-  ];
+  ]);
 </script>
 
 <main class="min-h-screen bg-gray-100">
