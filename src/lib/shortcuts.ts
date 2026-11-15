@@ -57,7 +57,11 @@ export const GRID_SHORTCUTS: [string, string][] = [
 /** Route a keydown to a shortcut. Returns true if one ran. */
 export function handleShortcut(event: KeyboardEvent): boolean {
   const target = event.target as HTMLElement | null;
-  const typing = !!target?.closest('input, textarea, select, [contenteditable], [role="slider"], [role="combobox"], [role="tab"], [role="dialog"]');
+  // Fields that consume ordinary typing, and widgets that own their navigation keys
+  const textual = !!target?.closest('input, textarea, select, [contenteditable], [role="combobox"], [role="dialog"]');
+  const navigation = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Home', 'End', 'PageUp', 'PageDown'].includes(event.key);
+  // Tabs and sliders only use the navigation keys, so letters keep working after you click one
+  const typing = textual || (!!target?.closest('[role="tab"], [role="slider"]') && navigation);
   const onButton = !!target?.closest('button, a');
   const gridFocused = target?.getAttribute('role') === 'application';
 

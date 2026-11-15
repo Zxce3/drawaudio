@@ -18,6 +18,8 @@
       <Tabs.Trigger value="tools">Tools</Tabs.Trigger>
       <Tabs.Trigger value="song">Song</Tabs.Trigger>
     </Tabs.List>
+    <!-- A new scroll area per tab, so every tab opens at its top -->
+    {#key ui.panelTab}
     <ScrollArea class="min-h-0 flex-1">
       <div class="px-4 pt-2 pb-5">
         <Tabs.Content value="sequencer"><SequencerTab /></Tabs.Content>
@@ -27,5 +29,6 @@
         <Tabs.Content value="song"><SongTab /></Tabs.Content>
       </div>
     </ScrollArea>
+    {/key}
   </Tabs.Root>
 </aside>
