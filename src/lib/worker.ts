@@ -1,57 +1,17 @@
-let tempo = 120;
-let isPlaying = false;
-let lastStepTime = 0;
+// Metronome worker: timers in workers are not throttled in background tabs.
+// It only emits ticks; the audio engine does the precise scheduling.
+let timer: ReturnType<typeof setInterval> | null = null;
 
-function scheduleNextStep() {
-  if (!isPlaying) return;
-
-  const now = performance.now();
-  if (!lastStepTime) lastStepTime = now;
-
-  // Send message to trigger next step
-  postMessage({ type: 'playStep' });
-
-  // Calculate next step time based on tempo
-  const stepInterval = (60000 / tempo) / 4; // sixteenth notes
-  lastStepTime += stepInterval;
-  
-  // Schedule next step with timing correction
-  let nextStepDelay = lastStepTime - now;
-  nextStepDelay = Math.max(nextStepDelay, 10); // Minimum delay of 10ms
-  
-  setTimeout(scheduleNextStep, nextStepDelay);
-}
-
-self.onmessage = (e: MessageEvent) => {
-  const { type, payload } = e.data;
-  
-  switch (type) {
-    case 'startPlayback':
-      if (!isPlaying) {
-        isPlaying = true;
-        tempo = payload?.bpm || tempo;
-        lastStepTime = 0;
-        scheduleNextStep();
-      }
-      break;
-      
-    case 'stopPlayback':
-      isPlaying = false;
-      lastStepTime = 0;
-      break;
-      
-    case 'setTempo':
-      tempo = payload;
-      // Reset timing if playing to maintain sync
-      if (isPlaying) {
-        lastStepTime = 0;
-      }
-      break;
+self.onmessage = (e: MessageEvent<{ type: string; interval?: number }>) => {
+  if (e.data.type === 'start') {
+    if (timer) clearInterval(timer);
+    timer = setInterval(() => postMessage({ type: 'tick' }), e.data.interval ?? 25);
+  } else if (e.data.type === 'stop') {
+    if (timer) clearInterval(timer);
+    timer = null;
   }
 };
 
-// Error handling
 self.onerror = (error) => {
   console.error('Worker error:', error);
-  postMessage({ type: 'error', payload: error instanceof ErrorEvent ? error.message : String(error) });
 };

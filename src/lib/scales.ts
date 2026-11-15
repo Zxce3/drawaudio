@@ -77,6 +77,7 @@ export interface RowPitch {
   octave: number;
   frequency: number;
   isRoot: boolean;
+  midi: number;
 }
 
 /**
@@ -98,7 +99,8 @@ export function getRowPitch(scale: string, gridSize: number, row: number): RowPi
     note,
     octave,
     frequency: MIDDLE_C * NOTE_RATIOS[note] * Math.pow(2, octave - 4),
-    isRoot: degree % len === 0
+    isRoot: degree % len === 0,
+    midi: Math.round(69 + 12 * Math.log2(MIDDLE_C * NOTE_RATIOS[note] * Math.pow(2, octave - 4) / 440))
   };
 }
 
@@ -108,3 +110,21 @@ export function formatNote(pitch: RowPitch): string {
 
 // Helper type to get array of available scales
 export type AvailableScales = keyof typeof SCALES;
+
+/** The row whose pitch is closest to a MIDI note number */
+export function findRowForMidi(scale: string, gridSize: number, midi: number): number {
+  let best = 0;
+  let bestDist = Infinity;
+  for (let row = 0; row < gridSize; row++) {
+    const dist = Math.abs(getRowPitch(scale, gridSize, row).midi - midi);
+    if (dist < bestDist) {
+      best = row;
+      bestDist = dist;
+    }
+  }
+  return best;
+}
+
+export function scaleLabel(name: string): string {
+  return name.replace(/([a-z])([A-Z])/g, '$1 $2');
+}

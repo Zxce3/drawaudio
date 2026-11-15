@@ -1,192 +1,243 @@
 import { base } from '$app/paths';
 import { getRowPitch } from './scales';
+import type { Effects, ImpulseType, Song, SoundParams, Track } from './types';
 
-export class AudioService {
-  private audioContext: AudioContext | null = null;
-  private oscillator: OscillatorNode | null = null;
-  private gainNode: GainNode | null = null;
-  private filterNode: BiquadFilterNode | null = null;
-  private delayNode: DelayNode | null = null;
-  private delayGainNode: GainNode | null = null;
-  private delayWetNode: GainNode | null = null;
-  private distortionNode: WaveShaperNode | null = null;
-  private busNode: GainNode | null = null;
-  private compressorNode: DynamicsCompressorNode | null = null;
-  private currentImpulse = 'reverb';
-  private convolverNode: ConvolverNode | null = null;
-  private reverbGainNode: GainNode | null = null;
-  private isInitialized = false;
-  private bpm = 120;
-  private stepInterval: number | null = null;
-  private currentStep = 0;
-  private isPlaying = false;
-  private matrix: boolean[][] = [];
-  private playbackPatterns = {
-    forward: (step: number) => (step + 1) % this.matrixSize,
-    backward: (step: number) => (step - 1 + this.matrixSize) % this.matrixSize,
-    bounce: (step: number) => {
-      if (this.isReverse) {
-        if (step <= 0) {
-          this.isReverse = false;
-          return 1;
-        }
-        return step - 1;
-      } else {
-        if (step >= this.matrixSize - 1) {
-          this.isReverse = true;
-          return step - 1;
-        }
-        return step + 1;
-      }
-    },
-    random: () => Math.floor(Math.random() * this.matrixSize)
-  };
+interface Channel {
+  input: GainNode;
+  panner: StereoPannerNode;
+  send: GainNode;
+}
 
-  private currentPattern: keyof typeof this.playbackPatterns = 'forward';
-  private isReverse = false;
+/**
+ * Multi-track step sequencer + synth built on the Web Audio API.
+ *
+ * Signal flow:
+ *   voice -> track input (volume) -> panner -> bus
+ *                                 \-> reverb send -> convolver -> reverb mix \
+ *   bus -> distortion -> EQ -> chorus -> master -> compressor -> out         |
+ *   bus -> delay (feedback loop) -> delay mix -----------------------------> compressor
+ *
+ * The song object is read directly (it is the app's reactive state), so edits
+ * made while playing are picked up on the next scheduled step.
+ */
+export class AudioEngine {
+  private ctx: AudioContext | null = null;
+  private worker: Worker | null = null;
+  private channels = new Map<string, Channel>();
+  private impulses = new Map<ImpulseType, AudioBuffer>();
+  private pulseWaves = new Map<number, PeriodicWave>();
+  private noiseBuffer: AudioBuffer | null = null;
+  private initPromise: Promise<void> | null = null;
 
-  // Audio parameters with defaults
-  private params = {
-    attack: 0.01,
-    decay: 0.1,
-    sustain: 0.6,
-    release: 0.25,
-    delayTime: 0.3,
-    delayFeedback: 0.3,
-    reverbMix: 0.3,
-    filterCutoff: 6000,
-    filterResonance: 0.7,
-    distortion: 0,
-    waveform: 'sine' as OscillatorType
-  };
+  private bus!: GainNode;
+  private distortion!: WaveShaperNode;
+  private eqLow!: BiquadFilterNode;
+  private eqMid!: BiquadFilterNode;
+  private eqHigh!: BiquadFilterNode;
+  private delay!: DelayNode;
+  private delayFeedback!: GainNode;
+  private delayMix!: GainNode;
+  private convolver!: ConvolverNode;
+  private reverbMix!: GainNode;
+  private chorusDelay!: DelayNode;
+  private chorusMix!: GainNode;
+  private chorusDry!: GainNode;
+  private master!: GainNode;
+  private compressor!: DynamicsCompressorNode;
+  private analyser!: AnalyserNode;
+  private meterData = new Uint8Array(0);
 
-  private activeNotes: Set<number> = new Set();
-  private notesInColumn: Map<number, number[]> = new Map();
-  private currentScale = 'Major';
-    private worker: Worker | null = null;
-  private activePlayingNotes: Set<string> = new Set(); // Format: "row,col"
-  private previousStep: number = -1;
-  private playStepCallbacks: Set<(step: number) => void> = new Set();
-  private impulseResponses: Map<string, AudioBuffer> = new Map();
+  // Sequencer state
+  private playing = false;
+  private nextStep = 0;
+  private nextTime = 0;
+  private reverse = false;
+  private queue: { step: number; time: number }[] = [];
+  private raf = 0;
+  private stepListeners = new Set<(step: number, time: number) => void>();
+  private startTime = 0;
 
-  constructor(private matrixSize: number = 64) {
-    this.createWorker();
+  constructor(private song: Song) {}
+
+  setSong(song: Song) {
+    this.song = song;
   }
 
-  private createWorker(): void {
-    this.worker = new Worker(new URL('./worker.ts', import.meta.url));
-    this.worker.postMessage({ type: 'setTempo', payload: this.bpm });
-    this.worker.onmessage = ({ data }) => {
-      if (data.type === 'playStep') {
-        this.playCurrentStep();
-      }
-    };
+  get initialized(): boolean {
+    return this.ctx !== null && this.impulses.size > 0;
   }
 
-  async initialize(): Promise<void> {
-    if (this.isInitialized) return;
+  get isPlaying(): boolean {
+    return this.playing;
+  }
 
-    try {
-      this.audioContext = new AudioContext();
-      await this.setupNodes();
-      await this.loadImpulseResponse();
-      this.isInitialized = true;
-    } catch (error) {
-      console.error('Failed to initialize audio:', error);
+  /** Seconds since playback started (audio clock) */
+  get elapsed(): number {
+    return this.playing && this.ctx ? Math.max(0, this.ctx.currentTime - this.startTime) : 0;
+  }
+
+  /** Create the audio graph. Must be called from a user gesture. */
+  initialize(): Promise<void> {
+    this.initPromise ??= this.setup().catch((error) => {
+      this.initPromise = null;
       throw error;
-    }
+    });
+    return this.initPromise;
   }
 
-  private async setupNodes(): Promise<void> {
-    if (!this.audioContext) return;
+  private async setup() {
+    const ctx = new AudioContext({ latencyHint: 'interactive' });
+    this.ctx = ctx;
 
-    // Create main nodes
-    this.oscillator = this.audioContext.createOscillator();
-    this.gainNode = this.audioContext.createGain();
-    this.filterNode = this.audioContext.createBiquadFilter();
-    this.delayNode = this.audioContext.createDelay(2.0);
-    this.delayGainNode = this.audioContext.createGain();
-    this.convolverNode = this.audioContext.createConvolver();
-    this.reverbGainNode = this.audioContext.createGain();
-    this.delayWetNode = this.audioContext.createGain();
-    this.distortionNode = this.audioContext.createWaveShaper();
-    this.distortionNode.oversample = '4x';
-    this.busNode = this.audioContext.createGain();
-    this.compressorNode = this.audioContext.createDynamicsCompressor();
-    this.delayWetNode.gain.value = 0.6;
-    this.distortionNode.curve = this.makeDistortionCurve(this.params.distortion);
+    this.bus = ctx.createGain();
+    this.distortion = ctx.createWaveShaper();
+    this.distortion.oversample = '4x';
+    this.eqLow = ctx.createBiquadFilter();
+    this.eqLow.type = 'lowshelf';
+    this.eqLow.frequency.value = 200;
+    this.eqMid = ctx.createBiquadFilter();
+    this.eqMid.type = 'peaking';
+    this.eqMid.frequency.value = 1200;
+    this.eqMid.Q.value = 0.8;
+    this.eqHigh = ctx.createBiquadFilter();
+    this.eqHigh.type = 'highshelf';
+    this.eqHigh.frequency.value = 4500;
 
-    // Configure nodes
-    this.oscillator.type = this.params.waveform;
-    this.gainNode.gain.value = 0;
-    this.filterNode.type = 'lowpass';
-    this.filterNode.frequency.value = this.params.filterCutoff;
-    this.filterNode.Q.value = this.params.filterResonance;
-    this.delayNode.delayTime.value = this.params.delayTime;
-    this.delayGainNode.gain.value = this.params.delayFeedback;
-    this.reverbGainNode.gain.value = this.params.reverbMix;
+    // Chorus: short modulated delay mixed with the dry signal
+    this.chorusDelay = ctx.createDelay(0.1);
+    this.chorusDelay.delayTime.value = 0.025;
+    const lfo = ctx.createOscillator();
+    lfo.frequency.value = 0.6;
+    const lfoDepth = ctx.createGain();
+    lfoDepth.gain.value = 0.006;
+    lfo.connect(lfoDepth).connect(this.chorusDelay.delayTime);
+    lfo.start();
+    this.chorusMix = ctx.createGain();
+    this.chorusDry = ctx.createGain();
 
-    // Signal flow: voices -> filter -> distortion -> bus -> (dry | delay | reverb) -> compressor -> out
-    this.oscillator.connect(this.gainNode);
-    this.gainNode.connect(this.filterNode);
-    this.filterNode.connect(this.distortionNode);
-    this.distortionNode.connect(this.busNode);
-    this.busNode.connect(this.compressorNode);
-    this.busNode.connect(this.delayNode);
-    this.delayNode.connect(this.delayGainNode);
-    this.delayGainNode.connect(this.delayNode);
-    this.delayNode.connect(this.delayWetNode);
-    this.delayWetNode.connect(this.compressorNode);
-    this.busNode.connect(this.convolverNode);
-    this.convolverNode.connect(this.reverbGainNode);
-    this.reverbGainNode.connect(this.compressorNode);
-    this.compressorNode.connect(this.audioContext.destination);
+    this.master = ctx.createGain();
+    this.compressor = ctx.createDynamicsCompressor();
+    this.analyser = ctx.createAnalyser();
+    this.analyser.fftSize = 256;
+    this.meterData = new Uint8Array(this.analyser.fftSize);
 
-    // Start oscillator
-    this.oscillator.start();
+    this.delay = ctx.createDelay(2);
+    this.delayFeedback = ctx.createGain();
+    this.delayMix = ctx.createGain();
+    this.convolver = ctx.createConvolver();
+    this.reverbMix = ctx.createGain();
+
+    this.bus.connect(this.distortion);
+    this.distortion.connect(this.eqLow).connect(this.eqMid).connect(this.eqHigh);
+    this.eqHigh.connect(this.chorusDry).connect(this.master);
+    this.eqHigh.connect(this.chorusDelay).connect(this.chorusMix).connect(this.master);
+    this.master.connect(this.compressor);
+    this.bus.connect(this.delay);
+    this.delay.connect(this.delayFeedback).connect(this.delay);
+    this.delay.connect(this.delayMix).connect(this.compressor);
+    this.convolver.connect(this.reverbMix).connect(this.compressor);
+    this.compressor.connect(this.analyser);
+    this.compressor.connect(ctx.destination);
+
+    this.noiseBuffer = this.makeNoise(ctx);
+    await this.loadImpulses();
+    this.applyEffects();
+    this.syncTracks();
+
+    this.worker = new Worker(new URL('./worker.ts', import.meta.url), { type: 'module' });
+    this.worker.onmessage = () => this.schedule();
   }
 
-  private async loadImpulseResponse(): Promise<void> {
-    if (!this.audioContext || !this.convolverNode) return;
+  private makeNoise(ctx: AudioContext): AudioBuffer {
+    const buffer = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+    return buffer;
+  }
 
-    const files: Record<string, string> = {
+  private async loadImpulses() {
+    const ctx = this.ctx!;
+    const files: Record<ImpulseType, string> = {
       reverb: 'plate-reverb',
       guitar: 'guitar-cab',
       drum: 'drum-room'
     };
-
     try {
-      for (const [type, file] of Object.entries(files)) {
+      for (const [type, file] of Object.entries(files) as [ImpulseType, string][]) {
         const response = await fetch(`${base}/impulse-${file}.wav`);
-        if (!response.ok) {
-          throw new Error(`Impulse response ${file} not found`);
-        }
-        const arrayBuffer = await response.arrayBuffer();
-        const audioBuffer = await this.audioContext.decodeAudioData(arrayBuffer);
-        this.impulseResponses.set(type, audioBuffer);
+        if (!response.ok) throw new Error(`Impulse response ${file} not found`);
+        this.impulses.set(type, await ctx.decodeAudioData(await response.arrayBuffer()));
       }
-
-      this.convolverNode.buffer = this.impulseResponses.get(this.currentImpulse) || null;
     } catch (error) {
-      console.warn('Using fallback impulse response:', error);
-      const sampleRate = this.audioContext.sampleRate;
-      const length = 2 * sampleRate; // 2 seconds
-      const impulse = this.audioContext.createBuffer(2, length, sampleRate);
-      
-      // Generate simple exponential decay noise
-      for (let channel = 0; channel < 2; channel++) {
-        const channelData = impulse.getChannelData(channel);
-        for (let i = 0; i < length; i++) {
-          const t = i / sampleRate;
-          channelData[i] = (Math.random() * 2 - 1) * Math.exp(-4 * t);
-        }
+      console.warn('Using synthetic impulse response:', error);
+      const length = 2 * ctx.sampleRate;
+      const buffer = ctx.createBuffer(2, length, ctx.sampleRate);
+      for (let c = 0; c < 2; c++) {
+        const data = buffer.getChannelData(c);
+        for (let i = 0; i < length; i++) data[i] = (Math.random() * 2 - 1) * Math.exp((-4 * i) / ctx.sampleRate);
       }
-      
-      this.convolverNode.buffer = impulse;
+      for (const type of Object.keys(files) as ImpulseType[]) this.impulses.set(type, buffer);
     }
   }
 
-  private makeDistortionCurve(amount: number): Float32Array<ArrayBuffer> | null {
+  // ---------------------------------------------------------------- mixing
+
+  /** Push mixer + effect settings from the song into the audio graph */
+  syncTracks() {
+    if (!this.ctx) return;
+    const ctx = this.ctx;
+    const tracks = this.song.tracks;
+    const anySolo = tracks.some((t) => t.solo);
+    const ids = new Set(tracks.map((t) => t.id));
+
+    for (const [id, channel] of this.channels) {
+      if (!ids.has(id)) {
+        channel.input.disconnect();
+        channel.panner.disconnect();
+        channel.send.disconnect();
+        this.channels.delete(id);
+      }
+    }
+    for (const track of tracks) {
+      let channel = this.channels.get(track.id);
+      if (!channel) {
+        channel = {
+          input: ctx.createGain(),
+          panner: ctx.createStereoPanner(),
+          send: ctx.createGain()
+        };
+        channel.input.connect(channel.panner);
+        channel.panner.connect(this.bus);
+        channel.panner.connect(channel.send).connect(this.convolver);
+        this.channels.set(track.id, channel);
+      }
+      const audible = !track.mute && (!anySolo || track.solo);
+      const t = ctx.currentTime;
+      channel.input.gain.setTargetAtTime(audible ? track.volume : 0, t, 0.02);
+      channel.panner.pan.setTargetAtTime(track.pan, t, 0.02);
+      channel.send.gain.setTargetAtTime(track.reverbSend, t, 0.02);
+    }
+  }
+
+  applyEffects() {
+    if (!this.ctx) return;
+    const e: Effects = this.song.effects;
+    const t = this.ctx.currentTime;
+    this.delay.delayTime.setTargetAtTime(Math.max(e.delayTime, 0.01), t, 0.05);
+    this.delayFeedback.gain.setTargetAtTime(Math.min(e.delayFeedback, 0.9), t, 0.05);
+    this.delayMix.gain.setTargetAtTime(e.delayMix, t, 0.05);
+    this.reverbMix.gain.setTargetAtTime(e.reverbMix, t, 0.05);
+    this.chorusMix.gain.setTargetAtTime(e.chorus * 0.7, t, 0.05);
+    this.chorusDry.gain.setTargetAtTime(1 - e.chorus * 0.3, t, 0.05);
+    this.eqLow.gain.setTargetAtTime(e.eqLow, t, 0.05);
+    this.eqMid.gain.setTargetAtTime(e.eqMid, t, 0.05);
+    this.eqHigh.gain.setTargetAtTime(e.eqHigh, t, 0.05);
+    this.distortion.curve = this.distortionCurve(e.distortion);
+    const impulse = this.impulses.get(e.impulse);
+    if (impulse && this.convolver.buffer !== impulse) this.convolver.buffer = impulse;
+  }
+
+  private distortionCurve(amount: number): Float32Array<ArrayBuffer> | null {
     if (amount <= 0) return null;
     const n = 1024;
     const curve = new Float32Array(n);
@@ -197,301 +248,219 @@ export class AudioService {
     return curve;
   }
 
-  private sendWorkerMessage(type: string, payload?: any): void {
-    if (this.worker) {
-      this.worker.postMessage({ type, payload });
+  /** Master output level, 0 - 1 */
+  getLevel(): number {
+    if (!this.analyser) return 0;
+    this.analyser.getByteTimeDomainData(this.meterData as Uint8Array<ArrayBuffer>);
+    let peak = 0;
+    for (const v of this.meterData) peak = Math.max(peak, Math.abs(v - 128));
+    return Math.min(1, peak / 128);
+  }
+
+  // ------------------------------------------------------------- sequencer
+
+  onStep(listener: (step: number, time: number) => void): () => void {
+    this.stepListeners.add(listener);
+    return () => this.stepListeners.delete(listener);
+  }
+
+  async start() {
+    await this.initialize();
+    const ctx = this.ctx!;
+    await ctx.resume();
+    this.stop();
+    this.playing = true;
+    this.nextStep = this.song.pattern === 'backward' ? this.song.gridSize - 1 : 0;
+    this.reverse = false;
+    this.nextTime = ctx.currentTime + 0.06;
+    this.startTime = this.nextTime;
+    this.queue = [];
+    this.worker?.postMessage({ type: 'start', interval: 25 });
+    this.schedule();
+    this.raf = requestAnimationFrame(this.pump);
+  }
+
+  stop() {
+    this.playing = false;
+    this.worker?.postMessage({ type: 'stop' });
+    cancelAnimationFrame(this.raf);
+    this.queue = [];
+  }
+
+  /** Look-ahead scheduler: queue every step that starts in the next 120ms */
+  private schedule() {
+    if (!this.playing || !this.ctx) return;
+    const stepDuration = 60 / this.song.tempo / 4; // sixteenth notes
+    while (this.nextTime < this.ctx.currentTime + 0.12) {
+      this.playColumn(this.nextStep, this.nextTime, stepDuration);
+      this.queue.push({ step: this.nextStep, time: this.nextTime });
+      this.nextStep = this.advance(this.nextStep);
+      this.nextTime += stepDuration;
     }
   }
 
-  setBpm(bpm: number): void {
-    this.bpm = bpm;
-    this.sendWorkerMessage('setTempo', bpm);
-  }
+  /** Tell the UI about a step when its audio time arrives */
+  private pump = () => {
+    if (!this.playing || !this.ctx) return;
+    while (this.queue.length && this.queue[0].time <= this.ctx.currentTime) {
+      const { step, time } = this.queue.shift()!;
+      this.stepListeners.forEach((listener) => listener(step, time));
+    }
+    this.raf = requestAnimationFrame(this.pump);
+  };
 
-  setMatrix(matrix: boolean[][]): void {
-    this.matrix = matrix;
-    this.scanGrid();
-  }
-
-  setPlaybackPattern(pattern: keyof typeof this.playbackPatterns) {
-    this.currentPattern = pattern;
-    if (this.isPlaying) {
-      this.stopSequence();
-      this.startSequence();
+  private advance(step: number): number {
+    const size = this.song.gridSize;
+    switch (this.song.pattern) {
+      case 'backward':
+        return (step - 1 + size) % size;
+      case 'random':
+        return Math.floor(Math.random() * size);
+      case 'bounce':
+        if (size < 2) return 0;
+        if (this.reverse) {
+          if (step <= 0) {
+            this.reverse = false;
+            return 1;
+          }
+          return step - 1;
+        }
+        if (step >= size - 1) {
+          this.reverse = true;
+          return step - 1;
+        }
+        return step + 1;
+      default:
+        return (step + 1) % size;
     }
   }
 
-  async startSequence(): Promise<void> {
-    if (!this.audioContext) return;
-    this.isPlaying = true;
-    this.currentStep = 0;
-    this.isReverse = false;
-
-    // Set initial state before starting worker
-    await this.audioContext.resume();
-    
-    // Start the worker
-    this.sendWorkerMessage('startPlayback', { 
-      bpm: this.bpm,
-      currentPattern: this.currentPattern
-    });
-  }
-
-  stopSequence(): void {
-    this.sendWorkerMessage('stopPlayback');
-    this.isPlaying = false;
-    this.stopSound();
-  }
-
-  private playStep(step: number, time: number): void {
-    const activeRows = this.notesInColumn.get(step);
-    if (!activeRows) return;
-
-    for (const row of activeRows) {
-      const frequency = this.getFrequency(step, row);
-      const volume = this.getVolume(row);
-      this.triggerNote(frequency, volume, time);
-    }
-  }
-
-  private playCurrentStep(): void {
-    if (!this.audioContext || !this.isPlaying) return;
-
-    // Clear previous playing notes
-    this.activePlayingNotes.clear();
-
-    // Play all active cells in current column
-    const activeRows = this.notesInColumn.get(this.currentStep);
-    if (activeRows) {
-      const now = this.audioContext.currentTime;
-      activeRows.forEach(row => {
-        const frequency = this.getFrequency(this.currentStep, row);
-        const volume = this.getVolume(row);
-        this.triggerNote(frequency, volume, now);
-        this.activePlayingNotes.add(`${row},${this.currentStep}`);
-      });
-    }
-
-    // Notify UI of step change
-    this.notifyStepChange();
-    
-    // Update step based on pattern
-    this.currentStep = this.playbackPatterns[this.currentPattern](this.currentStep);
-  }
-
-  private triggerNote(frequency: number, volume: number, time: number): void {
-    if (!this.audioContext || !this.gainNode || !this.oscillator) return;
-
-    const now = time;
-    const attackTime = now + this.params.attack;
-    const decayTime = attackTime + this.params.decay;
-    const releaseTime = decayTime + this.params.release;
-
-    // Create nodes for this note
-    const noteOscillator = this.audioContext.createOscillator();
-    const noteGain = this.audioContext.createGain();
-    const noteLowPass = this.audioContext.createBiquadFilter();
-    
-    // Configure filter
-    noteLowPass.type = 'lowpass';
-    noteLowPass.frequency.value = this.params.filterCutoff;
-    noteLowPass.Q.value = this.params.filterResonance;
-
-    // Configure oscillator
-    noteOscillator.type = this.params.waveform;
-    noteOscillator.frequency.setValueAtTime(frequency, now);
-    
-    // Smooth frequency changes
-    noteOscillator.frequency.setTargetAtTime(frequency, now, 0.03);
-
-    // Connect nodes
-    noteOscillator.connect(noteGain);
-    noteGain.connect(noteLowPass);
-    noteLowPass.connect(this.filterNode!);
-
-    // Smoother envelope
-    noteGain.gain.setValueAtTime(0, now);
-    noteGain.gain.linearRampToValueAtTime(volume * 0.8, attackTime); // Reduced peak volume
-    noteGain.gain.linearRampToValueAtTime(volume * this.params.sustain, decayTime);
-    noteGain.gain.linearRampToValueAtTime(0, releaseTime);
-
-    // Start and stop
-    noteOscillator.start(now);
-    noteOscillator.stop(releaseTime + 0.1);
-
-    // Cleanup
-    setTimeout(() => {
-      noteOscillator.disconnect();
-      noteGain.disconnect();
-      noteLowPass.disconnect();
-    }, (releaseTime - now + 0.2) * 1000);
-  }
-
-  // Add method to get current step for UI highlighting
-  getCurrentStep(): number {
-    return this.currentStep;
-  }
-
-  // Add method to check if sequence is playing
-  isSequencePlaying(): boolean {
-    return this.isPlaying;
-  }
-
-  /** Preview a note while drawing */
-  updateSound(x: number, y: number): void {
-    if (!this.isInitialized || !this.audioContext) return;
-    this.triggerNote(this.getFrequency(x, y), this.getVolume(y), this.audioContext.currentTime);
-  }
-
-  private getFrequency(_x: number, y: number): number {
-    return getRowPitch(this.currentScale, this.matrixSize, y).frequency;
-  }
-
-  private getVolume(_y: number): number {
-    // The master compressor keeps dense columns from clipping
-    return 0.4;
-  }
-
-  setWaveform(type: OscillatorType): void {
-    this.params.waveform = type;
-    if (this.oscillator) this.oscillator.type = type;
-  }
-
-  stopSound(): void {
-    if (!this.gainNode) return;
-    this.gainNode.gain.value = 0;
-  }
-
-  setParameter(param: keyof typeof this.params, value: number | OscillatorType): void {
-    if (param in this.params) {
-      (this.params[param] as any) = value;
-      this.updateParameter(param, value as number);
-    }
-  }
-
-  private updateParameter(param: string, value: number): void {
-    if (!this.audioContext) return;
-
-    const time = this.audioContext.currentTime;
-    
-    switch (param) {
-      case 'filterCutoff':
-        this.filterNode?.frequency.setTargetAtTime(value, time, 0.1);
-        break;
-      case 'filterResonance':
-        this.filterNode?.Q.setTargetAtTime(value, time, 0.1);
-        break;
-      case 'delayTime':
-        this.delayNode?.delayTime.setTargetAtTime(value, time, 0.1);
-        break;
-      case 'delayFeedback':
-        this.delayGainNode?.gain.setTargetAtTime(value, time, 0.1);
-        break;
-      case 'reverbMix':
-        this.reverbGainNode?.gain.setTargetAtTime(value, time, 0.1);
-        break;
-      case 'distortion':
-        if (this.distortionNode) this.distortionNode.curve = this.makeDistortionCurve(value);
-        break;
-    }
-  }
-
-  private terminateWorker(): void {
-    if (this.worker) {
-      this.worker.terminate();
-      this.worker = null;
-    }
-  }
-
-  cleanup(): void {
-    this.terminateWorker();
-    if (this.oscillator) {
-      this.oscillator.stop();
-      this.oscillator.disconnect();
-    }
-    if (this.gainNode) {
-      this.gainNode.disconnect();
-    }
-    if (this.filterNode) {
-      this.filterNode.disconnect();
-    }
-    if (this.audioContext) {
-      this.audioContext.close();
-    }
-    this.isInitialized = false;
-  }
-
-  private scanGrid(): void {
-    this.activeNotes.clear();
-    this.notesInColumn.clear();
-
-    for (let col = 0; col < this.matrixSize; col++) {
-      const activeInColumn: number[] = [];
-      
-      for (let row = 0; row < this.matrixSize; row++) {
-        if (this.matrix[row][col]) {
-          const noteIndex = row * this.matrixSize + col;
-          this.activeNotes.add(noteIndex);
-          activeInColumn.push(row);
+  private playColumn(col: number, time: number, stepDuration: number) {
+    const anySolo = this.song.tracks.some((t) => t.solo);
+    for (const track of this.song.tracks) {
+      if (track.mute || (anySolo && !track.solo)) continue;
+      const channel = this.channels.get(track.id);
+      if (!channel) continue;
+      for (let row = 0; row < this.song.gridSize; row++) {
+        if (track.matrix[row]?.[col]) {
+          this.playNote(track, row, time, stepDuration * track.params.gate, channel);
         }
       }
-      
-      if (activeInColumn.length > 0) {
-        this.notesInColumn.set(col, activeInColumn);
+    }
+  }
+
+  // ----------------------------------------------------------------- voices
+
+  /** Audition a single cell (used while drawing) */
+  preview(track: Track, row: number) {
+    const channel = this.channels.get(track.id);
+    if (!this.ctx || !channel) return;
+    this.playNote(track, row, this.ctx.currentTime, 0.2, channel);
+  }
+
+  private pulseWave(width: number): PeriodicWave {
+    const key = Math.round(width * 100);
+    let wave = this.pulseWaves.get(key);
+    if (!wave) {
+      const harmonics = 64;
+      const real = new Float32Array(harmonics);
+      const imag = new Float32Array(harmonics);
+      for (let n = 1; n < harmonics; n++) real[n] = (2 / (n * Math.PI)) * Math.sin(n * Math.PI * (key / 100));
+      wave = this.ctx!.createPeriodicWave(real, imag);
+      this.pulseWaves.set(key, wave);
+    }
+    return wave;
+  }
+
+  private setWave(osc: OscillatorNode, p: SoundParams) {
+    if (p.waveform === 'pulse') osc.setPeriodicWave(this.pulseWave(p.pulseWidth));
+    else osc.type = p.waveform;
+  }
+
+  private playNote(track: Track, row: number, time: number, hold: number, channel: Channel) {
+    const ctx = this.ctx!;
+    const p = track.params;
+    const freq = getRowPitch(this.song.scale, this.song.gridSize, row).frequency;
+    const peak = 0.35 / Math.sqrt(p.unison);
+    const sustainLevel = Math.max(p.sustain, 0.0001) * peak;
+    const noteOff = time + Math.max(hold, p.attack + 0.02);
+    const end = noteOff + p.release;
+
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.value = Math.min(p.cutoff, ctx.sampleRate / 2 - 100);
+    filter.Q.value = p.resonance;
+
+    const env = ctx.createGain();
+    env.gain.setValueAtTime(0, time);
+    env.gain.linearRampToValueAtTime(peak, time + p.attack);
+    env.gain.linearRampToValueAtTime(sustainLevel, time + p.attack + p.decay);
+    env.gain.setValueAtTime(sustainLevel, Math.max(noteOff, time + p.attack + p.decay));
+    env.gain.linearRampToValueAtTime(0, end);
+    filter.connect(env).connect(channel.input);
+
+    const sources: AudioScheduledSourceNode[] = [];
+    const oscillator = (f: number, detune = 0) => {
+      const osc = ctx.createOscillator();
+      this.setWave(osc, p);
+      osc.frequency.value = f;
+      osc.detune.value = detune;
+      osc.connect(filter);
+      sources.push(osc);
+      return osc;
+    };
+
+    for (let i = 0; i < p.unison; i++) {
+      const spread = p.unison === 1 ? 0 : (i / (p.unison - 1) - 0.5) * 2 * p.detune;
+      const osc = oscillator(freq, spread);
+      if (p.fmAmount > 0) {
+        const mod = ctx.createOscillator();
+        const depth = ctx.createGain();
+        mod.frequency.value = freq * 2;
+        depth.gain.value = p.fmAmount * freq * 1.5;
+        depth.gain.setValueAtTime(p.fmAmount * freq * 1.5, time);
+        depth.gain.exponentialRampToValueAtTime(Math.max(p.fmAmount * freq * 0.1, 0.01), time + p.attack + p.decay + 0.3);
+        mod.connect(depth).connect(osc.frequency);
+        sources.push(mod);
       }
     }
-  }
-
-  getActiveNotesCount(): number {
-    return this.activeNotes.size;
-  }
-
-  getActiveNotesInColumn(column: number): number[] {
-    return this.notesInColumn.get(column) || [];
-  }
-
-  setScale(scale: string): void {
-    this.currentScale = scale;
-  }
-
-  getRowLabelInfo(row: number) {
-    return getRowPitch(this.currentScale, this.matrixSize, row);
-  }
-
-  isNotePlaying(row: number, col: number): boolean {
-    return this.activePlayingNotes.has(`${row},${col}`);
-  }
-
-  isColumnActive(col: number): boolean {
-    return this.currentStep === col;
-  }
-
-  // Add method to register step callback
-  onStepChange(callback: (step: number) => void) {
-    this.playStepCallbacks.add(callback);
-    return () => this.playStepCallbacks.delete(callback);
-  }
-
-  private notifyStepChange() {
-    this.playStepCallbacks.forEach(callback => callback(this.currentStep));
-  }
-
-  resizeMatrix(newSize: number): void {
-    this.matrixSize = newSize;
-    this.matrix = Array(newSize).fill(0).map(() => Array(newSize).fill(false));
-    this.scanGrid();
-    this.currentStep = 0;
-    this.activePlayingNotes.clear();
-
-    // Recreate worker to ensure clean state
-    this.terminateWorker();
-    this.createWorker();
-  }
-
-  setImpulseType(type: 'reverb' | 'guitar' | 'drum'): void {
-    this.currentImpulse = type;
-    if (this.convolverNode && this.impulseResponses.has(type)) {
-      this.convolverNode.buffer = this.impulseResponses.get(type) || null;
+    if (p.subLevel > 0) {
+      const sub = ctx.createOscillator();
+      sub.type = 'sine';
+      sub.frequency.value = freq / 2;
+      const subGain = ctx.createGain();
+      subGain.gain.value = p.subLevel;
+      sub.connect(subGain).connect(filter);
+      sources.push(sub);
     }
+    if (p.noiseLevel > 0 && this.noiseBuffer) {
+      const noise = ctx.createBufferSource();
+      noise.buffer = this.noiseBuffer;
+      noise.loop = true;
+      const noiseGain = ctx.createGain();
+      noiseGain.gain.value = p.noiseLevel;
+      noise.connect(noiseGain).connect(filter);
+      sources.push(noise);
+    }
+
+    sources.forEach((s) => {
+      s.start(time);
+      s.stop(end + 0.05);
+    });
+    sources[0].onended = () => {
+      sources.forEach((s) => s.disconnect());
+      filter.disconnect();
+      env.disconnect();
+    };
+  }
+
+  dispose() {
+    this.stop();
+    this.worker?.terminate();
+    this.worker = null;
+    this.ctx?.close();
+    this.ctx = null;
+    this.initPromise = null;
+    this.channels.clear();
   }
 }

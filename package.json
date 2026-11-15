@@ -10,7 +10,8 @@
     "prepare": "svelte-kit sync || echo ''",
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
     "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
-    "generate-impulse": "ts-node --esm scripts/generate-impulse.ts"
+    "generate-impulse": "ts-node --esm scripts/generate-impulse.ts",
+    "test": "bun test"
   },
   "devDependencies": {
     "@internationalized/date": "^3.12.0",
@@ -22,8 +23,9 @@
     "@tailwindcss/forms": "^0.5.10",
     "@tailwindcss/typography": "^0.5.16",
     "@tailwindcss/vite": "^4",
+    "@types/bun": "^1.4.4",
     "bits-ui": "^2.20.0",
-    "svelte": "^5.0.0",
+    "svelte": "^5.57.3",
     "svelte-check": "^4.0.0",
     "tailwind-variants": "^3.3.0",
     "tailwindcss": "^4",
