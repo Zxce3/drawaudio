@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Play, Square, Eraser, Undo2, Redo2, ChevronLeft, ChevronRight, Music, Info } from '@lucide/svelte';
+  import { Play, Square, Eraser, Undo2, Redo2, ChevronLeft, ChevronRight, Music, Info, Circle } from '@lucide/svelte';
   import { Button } from '$lib/components/ui/button';
   import { Slider } from '$lib/components/ui/slider';
   import { Separator } from '$lib/components/ui/separator';
@@ -7,7 +7,7 @@
   import IconButton from './IconButton.svelte';
   import AboutDialog from './AboutDialog.svelte';
   import {
-    song, ui, clearTrack, commit, undo, redo, togglePlay, setGridSize, stepScale, tapTempo, scaleNames, getEngine
+    song, ui, clearTrack, commit, undo, redo, togglePlay, toggleRecording, setGridSize, stepScale, tapTempo, scaleNames, getEngine
   } from '$lib/song.svelte';
   import { scaleLabel } from '$lib/scales';
   import { GRID_SIZES, TIME_SIGNATURES } from '$lib/types';
@@ -23,7 +23,6 @@
   });
   const time = $derived(`${Math.floor(ui.elapsed / 60)}:${(ui.elapsed % 60).toFixed(1).padStart(4, '0')}`);
 
-  let aboutOpen = $state(false);
   let level = $state(0);
   $effect(() => {
     if (!ui.playing) {
@@ -63,7 +62,11 @@
     <Button onclick={togglePlay} variant={ui.playing ? 'secondary' : 'default'} class="w-24 gap-2" aria-keyshortcuts="Space">
       {#if ui.playing}<Square class="size-4" /> Stop{:else}<Play class="size-4" /> Play{/if}
     </Button>
-    <IconButton icon={Eraser} label="Clear active track" onclick={clearTrack} />
+    <IconButton icon={Circle} label={ui.recording ? 'Stop recording and save WAV (R)' : 'Record to WAV (R)'} onclick={toggleRecording} pressed={ui.recording} disabled={ui.rendering} />
+    {#if ui.recording}
+      <span class="text-destructive font-mono text-xs tabular-nums" role="timer" aria-label="Recording time">● {ui.recordSeconds.toFixed(1)}s</span>
+    {/if}
+    <IconButton icon={Eraser} label="Clear active track (C)" onclick={clearTrack} />
     <IconButton icon={Undo2} label="Undo (Ctrl+Z)" onclick={undo} disabled={!ui.canUndo} />
     <IconButton icon={Redo2} label="Redo (Ctrl+Shift+Z)" onclick={redo} disabled={!ui.canRedo} />
   </div>
@@ -89,10 +92,10 @@
   </div>
 
   <div class="ml-auto">
-    <IconButton icon={Info} label="About DrawAudio" onclick={() => (aboutOpen = true)} />
+    <IconButton icon={Info} label="About and shortcuts (?)" onclick={() => (ui.aboutOpen = true)} />
   </div>
 </header>
-<AboutDialog bind:open={aboutOpen} />
+<AboutDialog bind:open={ui.aboutOpen} />
 {#if ui.audioError}
   <p role="alert" class="bg-destructive/20 text-destructive px-3 py-1.5 text-sm">Audio could not start: {ui.audioError}</p>
 {/if}

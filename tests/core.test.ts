@@ -170,3 +170,27 @@ test('every named note in every example is in its scale (no silent snapping)', (
     }
   }
 });
+
+import { encodeWav } from '../src/lib/wav';
+
+test('WAV encoder writes a valid 16-bit stereo header and clamps samples', () => {
+  const wav = encodeWav([Float32Array.from([0, 1, -1, 2]), Float32Array.from([0.5, 0, 0, -2])], 44100);
+  const text = (o: number, n: number) => String.fromCharCode(...wav.slice(o, o + n));
+  const view = new DataView(wav.buffer);
+  expect(text(0, 4)).toBe('RIFF');
+  expect(text(8, 4)).toBe('WAVE');
+  expect(view.getUint16(22, true)).toBe(2); // channels
+  expect(view.getUint32(24, true)).toBe(44100);
+  expect(view.getUint32(40, true)).toBe(4 * 2 * 2); // 4 frames, 2 channels, 2 bytes
+  expect(wav.length).toBe(44 + 16);
+  expect(view.getInt16(44 + 4, true)).toBe(32767); // channel 0 frame 1 = +1
+  expect(view.getInt16(44 + 12, true)).toBe(32767); // clamped +2
+  expect(view.getInt16(44 + 14, true)).toBe(-32768); // clamped -2
+});
+
+test('sanitize validates bitcrusher settings', () => {
+  const s = sanitizeSong({ effects: { crusherBits: 99, crusherRate: -1, crusherEnabled: true }, tracks: [{}] });
+  expect(s.effects.crusherBits).toBe(16);
+  expect(s.effects.crusherRate).toBe(0.02);
+  expect(s.effects.crusherEnabled).toBe(true);
+});

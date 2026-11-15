@@ -69,6 +69,13 @@
     <ParamSlider label="Drive" bind:value={fx.distortion} min={0} max={50} step={1} format={(v) => String(v)} oncommit={commit} />
   </Section>
 
+  <Section title="Bitcrusher" bind:enabled={fx.crusherEnabled} onchange={commit} open={false}>
+    <ParamSlider label="Bit depth" bind:value={fx.crusherBits} min={1} max={16} step={1} format={(v) => `${v} bit`} oncommit={commit} />
+    <ParamSlider label="Sample rate" bind:value={fx.crusherRate} min={0.02} max={1} format={(v) => `${Math.round(v * 100)}%`} oncommit={commit} />
+    <ParamSlider label="Mix" bind:value={fx.crusherMix} min={0} max={1} format={pct} oncommit={commit} />
+    <p class="text-muted-foreground text-xs">Lo-fi crunch: fewer bits and a lower sample rate sound grittier.</p>
+  </Section>
+
   <Section title="Stereo spread" bind:enabled={fx.spreadEnabled} onchange={commit} open={false}>
     <ParamSlider label="Width" bind:value={fx.spread} min={0} max={1} format={pct} oncommit={commit} />
   </Section>

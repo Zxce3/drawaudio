@@ -4,7 +4,9 @@
   import Grid from '$lib/components/app/Grid.svelte';
   import SidePanel from '$lib/components/app/SidePanel.svelte';
   import TrackStrip from '$lib/components/app/TrackStrip.svelte';
-  import { song, ui, commit, undo, redo, togglePlay, getEngine, disposeEngine, replaceSong } from '$lib/song.svelte';
+  import Toast from '$lib/components/app/Toast.svelte';
+  import { song, ui, getEngine, disposeEngine, replaceSong } from '$lib/song.svelte';
+  import { handleShortcut } from '$lib/shortcuts';
   import { decodeShare, sanitizeSong, toCompact } from '$lib/storage';
   import { EXAMPLE_SONGS } from '$lib/songs';
   import { updateSeo } from '$lib/seo';
@@ -85,21 +87,7 @@
     return () => clearTimeout(timer);
   });
 
-  function onkeydown(event: KeyboardEvent) {
-    const target = event.target as HTMLElement | null;
-    if (target?.closest('input, textarea, select, [role="slider"], [role="combobox"], [role="tab"]')) return;
-    const mod = event.ctrlKey || event.metaKey;
-    if (mod && event.key.toLowerCase() === 'z') {
-      event.preventDefault();
-      event.shiftKey ? redo() : undo();
-    } else if (mod && event.key.toLowerCase() === 'y') {
-      event.preventDefault();
-      redo();
-    } else if (event.code === 'Space' && !target?.closest('button, a')) {
-      event.preventDefault();
-      togglePlay();
-    }
-  }
+  const onkeydown = handleShortcut;
 </script>
 
 <svelte:window {onkeydown} />
@@ -112,3 +100,4 @@
   </main>
   <TrackStrip />
 </div>
+<Toast />

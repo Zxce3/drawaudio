@@ -10,6 +10,8 @@ import {
   type Track
 } from './types';
 import type { Song } from './types';
+import { saveSong } from './storage';
+import { exportMidi } from './midi';
 
 export const song: Song = $state(createSong());
 
@@ -22,6 +24,12 @@ export const ui = $state({
   canUndo: false,
   canRedo: false,
   audioError: '',
+  aboutOpen: false,
+  recording: false,
+  recordSeconds: 0,
+  rendering: false,
+  toast: '',
+  songId: undefined as string | undefined,
   vizStyle: 'bars' as VizStyle,
   vizOpacity: 0.14
 });
@@ -248,4 +256,132 @@ export function disposeEngine() {
   engine = null;
   ui.playing = false;
   ui.step = -1;
+}
+
+// ------------------------------------------------------------ feedback toast
+
+let toastTimer: ReturnType<typeof setTimeout> | undefined;
+
+/** Show a short message (also announced to screen readers) */
+export function notify(message: string) {
+  ui.toast = message;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => (ui.toast = ''), 2600);
+}
+
+// ----------------------------------------------------------- files and saving
+
+function download(blob: Blob, name: string) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
+const fileName = () => song.name.replace(/[^\w-]+/g, '_') || 'song';
+
+export function saveCurrent() {
+  try {
+    ui.songId = saveSong($state.snapshot(song) as Song, ui.songId);
+    notify(`Saved “${song.name}”`);
+  } catch {
+    notify('Could not save: browser storage is unavailable or full');
+  }
+}
+
+export function exportMidiFile() {
+  download(new Blob([exportMidi($state.snapshot(song) as Song) as BlobPart], { type: 'audio/midi' }), `${fileName()}.mid`);
+  notify('MIDI file exported');
+}
+
+// ---------------------------------------------------------------- recording
+
+let recordTimer: ReturnType<typeof setInterval> | undefined;
+
+/** Start or stop capturing the output; stopping downloads a WAV file */
+export async function toggleRecording() {
+  if (ui.rendering) return;
+  if (!ui.recording) {
+    if (!(await ensureAudio())) return;
+    if (!getEngine().startRecording()) {
+      notify('Recording is not supported in this browser');
+      return;
+    }
+    ui.recording = true;
+    ui.recordSeconds = 0;
+    const started = performance.now();
+    recordTimer = setInterval(() => (ui.recordSeconds = (performance.now() - started) / 1000), 200);
+    notify('Recording… press R to stop and save');
+    return;
+  }
+  clearInterval(recordTimer);
+  ui.recording = false;
+  const wav = await getEngine().stopRecording();
+  if (wav) {
+    download(wav, `${fileName()}.wav`);
+    notify('Saved WAV recording');
+  } else {
+    notify('Nothing was recorded');
+  }
+}
+
+/** Play the song once from the start and save it as a WAV file, including the effect tails */
+export async function renderLoop() {
+  if (ui.rendering || ui.recording) return;
+  if (!(await ensureAudio())) return;
+  const engine = getEngine();
+  if (!engine.canRecord) {
+    notify('Recording is not supported in this browser');
+    return;
+  }
+  ui.rendering = true;
+  notify('Rendering one loop…');
+  try {
+    await play();
+    engine.startRecording();
+    const loop = (60 / song.tempo / 4) * song.gridSize;
+    await new Promise((resolve) => setTimeout(resolve, (loop + 2.5) * 1000));
+    stop();
+    const wav = await engine.stopRecording();
+    if (wav) {
+      download(wav, `${fileName()}.wav`);
+      notify('Loop rendered to WAV');
+    }
+  } finally {
+    ui.rendering = false;
+  }
+}
+
+// ------------------------------------------------------- track shortcuts
+
+export function selectTrack(index: number) {
+  if (index < 0 || index >= song.tracks.length) return;
+  song.activeTrack = index;
+  notify(`Track: ${song.tracks[index].name}`);
+}
+
+export function toggleMute() {
+  const t = activeTrack();
+  t.mute = !t.mute;
+  commit();
+  notify(`${t.name} ${t.mute ? 'muted' : 'unmuted'}`);
+}
+
+export function toggleSolo() {
+  const t = activeTrack();
+  t.solo = !t.solo;
+  commit();
+  notify(`${t.name} ${t.solo ? 'solo' : 'solo off'}`);
+}
+
+export function nudgeTempo(delta: number) {
+  song.tempo = Math.min(240, Math.max(30, song.tempo + delta));
+  commit();
+  notify(`${song.tempo} bpm`);
+}
+
+export function cycleVisualizer() {
+  ui.vizStyle = VIZ_STYLES[(VIZ_STYLES.indexOf(ui.vizStyle) + 1) % VIZ_STYLES.length];
+  notify(`Visualizer: ${ui.vizStyle}`);
 }

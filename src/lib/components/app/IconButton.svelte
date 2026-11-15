@@ -25,7 +25,7 @@
 <Tooltip.Root>
   <Tooltip.Trigger>
     {#snippet child({ props })}
-      <Button {...props} {variant} {size} {onclick} {disabled} aria-label={label} aria-pressed={pressed}>
+      <Button {...props} {variant} {size} {onclick} {disabled} aria-label={label} aria-pressed={pressed} class={pressed ? 'text-destructive' : ''}>
         <Icon class="size-4" />
       </Button>
     {/snippet}

@@ -1,6 +1,8 @@
 import { base } from '$app/paths';
 import { getRowPitch } from './scales';
 import { GRAIN_WORKLET_NAME, GRAIN_WORKLET_SOURCE } from './grain-worklet';
+import { CRUSHER_NAME, CRUSHER_SOURCE, RECORDER_NAME, RECORDER_SOURCE } from './worklets';
+import { encodeWav } from './wav';
 import { wavetableHarmonics } from './wavetables';
 import type { ChordType, DelayDivision, Effects, ImpulseType, Song, SoundParams, Track } from './types';
 
@@ -62,6 +64,12 @@ export class AudioEngine {
   private ringOsc!: OscillatorNode;
   private ringMix!: GainNode;
   private ringDry!: GainNode;
+  private crusher: AudioWorkletNode | null = null;
+  private crusherDry!: GainNode;
+  private crusherWet!: GainNode;
+  private recorder: AudioWorkletNode | null = null;
+  private recChunks: Float32Array[][] = [[], []];
+  private recResolve: ((wav: Blob | null) => void) | null = null;
   private grain: AudioWorkletNode | null = null;
   private grainIn!: GainNode;
   private grainWet!: GainNode;
@@ -218,7 +226,10 @@ export class AudioEngine {
 
     this.bus.connect(this.distortion);
     this.distortion.connect(this.eqLow).connect(this.eqMid).connect(this.eqHigh);
-    this.eqHigh.connect(this.ringDry).connect(this.chorusDry).connect(this.master);
+    this.crusherDry = ctx.createGain();
+    this.crusherWet = ctx.createGain();
+    this.crusherWet.gain.value = 0;
+    this.eqHigh.connect(this.ringDry).connect(this.crusherDry).connect(this.chorusDry).connect(this.master);
     this.eqHigh.connect(this.ringGain).connect(this.ringMix).connect(this.master);
     this.eqHigh.connect(this.chorusDelay).connect(this.chorusMix).connect(this.master);
     // Tape stage (wow/flutter, saturation, warmth), then sidechain ducking
@@ -280,6 +291,7 @@ export class AudioEngine {
 
     this.noiseBuffer = this.makeNoise(ctx);
     await this.setupGrainDelay(ctx);
+    await this.setupCrusherAndRecorder(ctx);
     await this.loadImpulses();
     this.applyEffects();
     this.syncTracks();
@@ -303,6 +315,78 @@ export class AudioEngine {
       console.warn('Reverse and pitch-shift delay are unavailable:', error);
       this.grain = null;
     }
+  }
+
+  private async addWorklet(ctx: AudioContext, source: string) {
+    const url = URL.createObjectURL(new Blob([source], { type: 'text/javascript' }));
+    try {
+      await ctx.audioWorklet.addModule(url);
+    } finally {
+      URL.revokeObjectURL(url);
+    }
+  }
+
+  private async setupCrusherAndRecorder(ctx: AudioContext) {
+    try {
+      await this.addWorklet(ctx, CRUSHER_SOURCE);
+      this.crusher = new AudioWorkletNode(ctx, CRUSHER_NAME, { outputChannelCount: [2] });
+      this.eqHigh.connect(this.crusher).connect(this.crusherWet).connect(this.master);
+    } catch (error) {
+      console.warn('Bitcrusher is unavailable:', error);
+      this.crusher = null;
+    }
+    try {
+      await this.addWorklet(ctx, RECORDER_SOURCE);
+      this.recorder = new AudioWorkletNode(ctx, RECORDER_NAME, { numberOfOutputs: 1, outputChannelCount: [2] });
+      this.recorder.port.onmessage = ({ data }) => {
+        this.recChunks[0].push(data.chunk[0]);
+        this.recChunks[1].push(data.chunk[1]);
+        if (data.done) this.finishRecording();
+      };
+      // The recorder needs an output connection to keep processing; keep it silent
+      const silent = ctx.createGain();
+      silent.gain.value = 0;
+      this.compressor.connect(this.recorder).connect(silent).connect(ctx.destination);
+    } catch (error) {
+      console.warn('Recording is unavailable:', error);
+      this.recorder = null;
+    }
+  }
+
+  get canRecord(): boolean {
+    return this.recorder !== null;
+  }
+
+  startRecording(): boolean {
+    if (!this.recorder) return false;
+    this.recChunks = [[], []];
+    this.recorder.port.postMessage('start');
+    return true;
+  }
+
+  /** Stop recording and resolve with a WAV file (null if nothing was captured) */
+  stopRecording(): Promise<Blob | null> {
+    return new Promise((resolve) => {
+      if (!this.recorder) return resolve(null);
+      this.recResolve = resolve;
+      this.recorder.port.postMessage('stop');
+    });
+  }
+
+  private finishRecording() {
+    const channels = this.recChunks.map((chunks) => {
+      const out = new Float32Array(chunks.reduce((n, c) => n + c.length, 0));
+      let offset = 0;
+      for (const chunk of chunks) {
+        out.set(chunk, offset);
+        offset += chunk.length;
+      }
+      return out;
+    });
+    this.recChunks = [[], []];
+    const resolve = this.recResolve;
+    this.recResolve = null;
+    resolve?.(channels[0].length ? new Blob([encodeWav(channels, this.ctx?.sampleRate ?? 48000)], { type: 'audio/wav' }) : null);
   }
 
   private makeCrackle(ctx: AudioContext): AudioBuffer {
@@ -435,6 +519,15 @@ export class AudioEngine {
       params.get('mode')?.setValueAtTime(mode === 'reverse' ? 0 : 1, t);
       params.get('rate')?.setValueAtTime(2 ** (e.delayPitch / 12), t);
     }
+
+    // Bitcrusher
+    if (this.crusher) {
+      set(this.crusher.parameters.get('bitDepth')!, e.crusherBits);
+      set(this.crusher.parameters.get('frequencyReduction')!, e.crusherRate);
+    }
+    const crush = e.crusherEnabled && this.crusher !== null;
+    set(this.crusherWet.gain, crush ? e.crusherMix : 0);
+    set(this.crusherDry.gain, crush ? 1 - e.crusherMix * 0.6 : 1);
 
     // Tape, vinyl and sidechain
     const tape = e.tapeEnabled;

@@ -16,6 +16,8 @@ An interactive audio sequencer where you can create music by drawing patterns on
 - **Effects**: delay, convolution reverb (plate, guitar cabinet, drum room), distortion, chorus and a 3-band EQ
 - **Transport**: tempo with tap tempo, time signatures, scales with prev/next, playback direction, undo and redo
 - **Tools**: random melody generator and transpose
+- **Recording**: press R to record to WAV, or render one clean loop; plus a bitcrusher effect
+- **Shortcuts**: Space, R, D/E, 1-8, M/S, [ ], - =, V, Ctrl+S and more (press ? in the app)
 - **Songs**: autosave, saved songs in the browser, shareable links and MIDI import/export
 - Built with SvelteKit, Svelte 5 runes, Tailwind CSS 4 and shadcn-svelte
 
@@ -63,3 +65,7 @@ DrawAudio uses the Web Audio API to generate sounds in real-time based on the vi
 ## License
 
 MIT
+
+## Credits
+
+Inspired by [draw.audio](https://draw.audio/) and [svelte-audio-visualizations](https://github.com/flo-bit/svelte-audio-visualizations) (MIT). The bitcrusher and WAV recorder follow the AudioWorklet patterns from [web-audio-samples](https://github.com/GoogleChromeLabs/web-audio-samples) (Apache-2.0).

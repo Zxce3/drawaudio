@@ -69,6 +69,7 @@ export const PARAM_RANGES: Record<string, [number, number]> = {
   gate: [0.1, 1], noteLength: [1, 5], ratchet: [1, 4], glide: [0, 1],
   arpNotes: [1, 8], arpOctaves: [1, 4], chordInversion: [0, 3],
   delayTime: [0.01, 1], delayFeedback: [0, 0.9], delayMix: [0, 1], reverbMix: [0, 1], reverbDecay: [0.1, 1],
+  crusherBits: [1, 16], crusherRate: [0.02, 1], crusherMix: [0, 1],
   distortion: [0, 50], chorus: [0, 1], spread: [0, 1], ringFreq: [20, 2000], ringMix: [0, 1],
   eqLow: [-12, 12], eqMid: [-12, 12], eqHigh: [-12, 12]
 };
@@ -118,6 +119,10 @@ export interface Effects {
   ringEnabled: boolean;
   ringFreq: number;
   ringMix: number;
+  crusherEnabled: boolean;
+  crusherBits: number; // 1 - 16
+  crusherRate: number; // fraction of the sample rate kept, 0.02 - 1
+  crusherMix: number;
   tapeEnabled: boolean;
   tapeWow: number;
   tapeSaturation: number;
@@ -211,6 +216,10 @@ export const DEFAULT_EFFECTS: Effects = {
   ringEnabled: false,
   ringFreq: 300,
   ringMix: 0.5,
+  crusherEnabled: false,
+  crusherBits: 8,
+  crusherRate: 0.4,
+  crusherMix: 0.6,
   tapeEnabled: false,
   tapeWow: 0.3,
   tapeSaturation: 0.4,

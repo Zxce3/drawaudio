@@ -7,6 +7,8 @@
   import OptionGrid from './OptionGrid.svelte';
   import { ui, transpose, generatePattern, clearTrack, VIZ_STYLES, type VizStyle } from '$lib/song.svelte';
 
+  import { SHORTCUTS, GRID_SHORTCUTS } from '$lib/shortcuts';
+  const groups = ['Playback', 'Editing', 'Tracks', 'Song', 'View'] as const;
   let density = $state(0.4);
   const vizOptions = VIZ_STYLES.map((v) => ({ value: v, label: v[0].toUpperCase() + v.slice(1) }));
 </script>
@@ -39,13 +41,19 @@
     </div>
   </Section>
 
-  <Section title="Shortcuts">
-    <dl class="text-muted-foreground grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-xs">
-      <dt class="text-foreground font-mono">Space</dt><dd>Play / stop</dd>
-      <dt class="text-foreground font-mono">Ctrl+Z</dt><dd>Undo</dd>
-      <dt class="text-foreground font-mono">Ctrl+Shift+Z</dt><dd>Redo</dd>
-      <dt class="text-foreground font-mono">Arrows</dt><dd>Move cursor in grid</dd>
-      <dt class="text-foreground font-mono">Enter</dt><dd>Toggle note at cursor</dd>
-    </dl>
+  <Section title="Shortcuts" open={false}>
+    {#each groups as group}
+      <h4 class="text-muted-foreground pt-1 text-xs font-medium tracking-wide uppercase">{group}</h4>
+      <dl class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-xs">
+        {#each SHORTCUTS.filter((sc) => sc.group === group) as sc}
+          <dt class="text-foreground font-mono">{sc.keys}</dt><dd class="text-muted-foreground">{sc.description}</dd>
+        {/each}
+        {#if group === 'Editing'}
+          {#each GRID_SHORTCUTS as [keys, text]}
+            <dt class="text-foreground font-mono">{keys}</dt><dd class="text-muted-foreground">{text} (grid focused)</dd>
+          {/each}
+        {/if}
+      </dl>
+    {/each}
   </Section>
 </div>

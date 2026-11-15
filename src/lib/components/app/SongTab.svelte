@@ -1,16 +1,15 @@
 <script lang="ts">
-  import { Save, Share2, Download, Upload, Trash2, FolderOpen } from '@lucide/svelte';
+  import { Save, Share2, Download, Upload, Trash2, FolderOpen, Disc3 } from '@lucide/svelte';
   import { Button } from '$lib/components/ui/button';
   import { Input } from '$lib/components/ui/input';
   import { Label } from '$lib/components/ui/label';
   import { onMount } from 'svelte';
-  import { song, replaceSong, commit } from '$lib/song.svelte';
-  import { saveSong, listSongs, deleteSong, encodeShare, sanitizeSong, type SavedSong } from '$lib/storage';
-  import { exportMidi, parseMidi, midiToSong } from '$lib/midi';
+  import { song, ui, replaceSong, commit, saveCurrent, exportMidiFile, renderLoop } from '$lib/song.svelte';
+  import { listSongs, deleteSong, encodeShare, sanitizeSong, type SavedSong } from '$lib/storage';
+  import { parseMidi, midiToSong } from '$lib/midi';
   import { EXAMPLE_SONGS, type ExampleSong } from '$lib/songs';
 
   let songs = $state<SavedSong[]>([]);
-  let currentId = $state<string | undefined>();
   let message = $state('');
   let fileInput: HTMLInputElement;
 
@@ -21,30 +20,26 @@
   }
 
   function save() {
-    try {
-      currentId = saveSong($state.snapshot(song) as typeof song, currentId);
-      songs = listSongs();
-      say(`Saved “${song.name}”.`);
-    } catch {
-      say('Could not save: browser storage is unavailable or full.');
-    }
+    saveCurrent();
+    songs = listSongs();
+    say(`Saved “${song.name}”.`);
   }
 
   function loadExample(example: ExampleSong) {
     replaceSong(example.create(), true); // undoable, so nothing is lost
-    currentId = undefined;
+    ui.songId = undefined;
     say(`Loaded “${example.name}”. Press Ctrl+Z to go back to your previous song.`);
   }
 
   function open(saved: SavedSong) {
     replaceSong(sanitizeSong(saved.data));
-    currentId = saved.id;
+    ui.songId = saved.id;
     say(`Opened “${saved.name}”.`);
   }
 
   function remove(saved: SavedSong) {
     deleteSong(saved.id);
-    if (currentId === saved.id) currentId = undefined;
+    if (ui.songId === saved.id) ui.songId = undefined;
     songs = listSongs();
   }
 
@@ -59,15 +54,6 @@
     history.replaceState(null, '', url);
   }
 
-  function download() {
-    const blob = new Blob([exportMidi($state.snapshot(song) as typeof song) as BlobPart], { type: 'audio/midi' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = `${song.name.replace(/[^\w-]+/g, '_') || 'song'}.mid`;
-    a.click();
-    URL.revokeObjectURL(a.href);
-  }
-
   async function importFile(event: Event) {
     const input = event.currentTarget as HTMLInputElement;
     const file = input.files?.[0];
@@ -76,7 +62,7 @@
     try {
       const imported = midiToSong(parseMidi(new Uint8Array(await file.arrayBuffer())), $state.snapshot(song) as typeof song, file.name);
       replaceSong(imported);
-      currentId = undefined;
+      ui.songId = undefined;
       say(`Imported ${imported.tracks.length} track(s) from “${file.name}”.`);
     } catch (error) {
       say(error instanceof Error ? error.message : 'Could not read that file.');
@@ -95,9 +81,17 @@
   </section>
 
   <section class="space-y-2">
+    <h3 class="text-sm font-medium">Audio</h3>
+    <Button variant="outline" class="w-full gap-2" onclick={renderLoop} disabled={ui.rendering || ui.recording}>
+      <Disc3 class="size-4" /> {ui.rendering ? 'Rendering…' : 'Render one loop to WAV'}
+    </Button>
+    <p class="text-muted-foreground text-xs">Plays the song once and saves it with its reverb and delay tails. Press R to record anything live instead.</p>
+  </section>
+
+  <section class="space-y-2">
     <h3 class="text-sm font-medium">MIDI</h3>
     <div class="grid grid-cols-2 gap-2">
-      <Button variant="outline" onclick={download} class="gap-2"><Download class="size-4" /> Export</Button>
+      <Button variant="outline" onclick={exportMidiFile} class="gap-2"><Download class="size-4" /> Export</Button>
       <Button variant="outline" onclick={() => fileInput.click()} class="gap-2"><Upload class="size-4" /> Import</Button>
     </div>
     <input bind:this={fileInput} type="file" accept=".mid,.midi,audio/midi" class="hidden" onchange={importFile} />
@@ -134,7 +128,7 @@
     {:else}
       <ul class="space-y-1">
         {#each songs as saved (saved.id)}
-          <li class="bg-card flex items-center gap-1 rounded-md border p-1.5 pl-3 {saved.id === currentId ? 'border-primary' : ''}">
+          <li class="bg-card flex items-center gap-1 rounded-md border p-1.5 pl-3 {saved.id === ui.songId ? 'border-primary' : ''}">
             <div class="min-w-0 flex-1">
               <p class="truncate text-sm">{saved.name}</p>
               <p class="text-muted-foreground text-xs">{new Date(saved.updatedAt).toLocaleString()}</p>
