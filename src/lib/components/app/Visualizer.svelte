@@ -80,6 +80,11 @@
   function drawBars(ctx: CanvasRenderingContext2D) {
     const gap = 3;
     const w = (width - gap * (BANDS - 1)) / BANDS;
+    // Fade each bar out toward its tip so it reads as a soft backdrop
+    const fade = ctx.createLinearGradient(0, height, 0, height * 0.1);
+    fade.addColorStop(0, ctx.fillStyle as string);
+    fade.addColorStop(1, 'transparent');
+    ctx.fillStyle = fade;
     for (let i = 0; i < BANDS; i++) {
       const h = Math.max(2, levels[i] ** 1.2 * height * 0.9);
       ctx.beginPath();

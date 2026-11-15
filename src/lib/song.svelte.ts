@@ -23,7 +23,7 @@ export const ui = $state({
   canRedo: false,
   audioError: '',
   vizStyle: 'bars' as VizStyle,
-  vizOpacity: 0.3
+  vizOpacity: 0.14
 });
 
 export type VizStyle = 'off' | 'bars' | 'circle' | 'wave' | 'glow';

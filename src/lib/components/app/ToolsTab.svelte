@@ -23,7 +23,7 @@
 
   <Section title="Visualizer">
     <OptionGrid label="Visualizer style" cols={5} options={vizOptions} value={ui.vizStyle} onchange={(v) => (ui.vizStyle = v as VizStyle)} />
-    <ParamSlider label="Opacity" bind:value={ui.vizOpacity} min={0.1} max={1} format={(v) => `${Math.round(v * 100)}%`} />
+    <ParamSlider label="Opacity" bind:value={ui.vizOpacity} min={0.03} max={0.6} step={0.01} format={(v) => `${Math.round(v * 100)}%`} />
     <p class="text-muted-foreground text-xs">The music is drawn behind the grid while it plays. Turn it off to save battery.</p>
   </Section>
 

@@ -10,7 +10,7 @@
   import { updateSeo } from '$lib/seo';
 
   const AUTOSAVE_KEY = 'drawaudio:autosave';
-  const VIZ_KEY = 'drawaudio:viz';
+  const VIZ_KEY = 'drawaudio:viz2';
 
   updateSeo({
     title: 'DrawAudio - Create Music by Drawing',
@@ -26,7 +26,7 @@
       const prefs = JSON.parse(localStorage.getItem(VIZ_KEY) ?? 'null');
       if (prefs && ['off', 'bars', 'circle', 'wave', 'glow'].includes(prefs.style)) {
         ui.vizStyle = prefs.style;
-        if (typeof prefs.opacity === 'number') ui.vizOpacity = Math.min(1, Math.max(0.1, prefs.opacity));
+        if (typeof prefs.opacity === 'number') ui.vizOpacity = Math.min(0.6, Math.max(0.03, prefs.opacity));
       } else if (matchMedia('(prefers-reduced-motion: reduce)').matches) {
         ui.vizStyle = 'off';
       }

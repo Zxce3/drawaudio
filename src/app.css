@@ -36,8 +36,8 @@
 	--input: oklch(0.3 0.008 285);
 	--ring: oklch(0.72 0.15 235);
 	--grid-cell: oklch(0.72 0.15 235);
-	--grid-line: oklch(1 0 0 / 0.07);
-	--grid-beat: oklch(1 0 0 / 0.16);
+	--grid-line: oklch(1 0 0 / 0.1);
+	--grid-beat: oklch(1 0 0 / 0.22);
 	--playhead: oklch(0.85 0.17 90);
 }
 
