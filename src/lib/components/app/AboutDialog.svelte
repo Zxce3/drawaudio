@@ -83,7 +83,7 @@
             (MIT). The bitcrusher and WAV recorder follow the AudioWorklet patterns from
             <a class="text-primary underline underline-offset-2" href="https://github.com/GoogleChromeLabs/web-audio-samples" target="_blank" rel="noopener noreferrer">web-audio-samples</a>
             (Apache-2.0). Built with SvelteKit, Svelte 5, Tailwind CSS, shadcn-svelte and the Web Audio API. The source is on
-            <a class="text-primary underline underline-offset-2" href="https://github.com/Zxce3/drawaudio-tmp" target="_blank" rel="noopener noreferrer">GitHub</a>.
+            <a class="text-primary underline underline-offset-2" href="https://github.com/Zxce3/drawaudio" target="_blank" rel="noopener noreferrer">GitHub</a>.
           </p>
         </section>
       </div>

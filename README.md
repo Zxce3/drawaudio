@@ -6,7 +6,7 @@
 
 A multi-track sequencer and synthesizer that runs entirely in your browser and works offline.
 
-[![Deploy](https://github.com/Zxce3/drawaudio-tmp/actions/workflows/deploy.yml/badge.svg)](https://github.com/Zxce3/drawaudio-tmp/actions)
+[![Deploy](https://github.com/Zxce3/drawaudio/actions/workflows/deploy.yml/badge.svg)](https://github.com/Zxce3/drawaudio/actions)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 ![Svelte 5](https://img.shields.io/badge/Svelte-5-ff3e00)
 ![PWA](https://img.shields.io/badge/PWA-offline-5a0fc8)
@@ -76,8 +76,8 @@ A multi-track sequencer and synthesizer that runs entirely in your browser and w
 You need [Bun](https://bun.sh/).
 
 ```bash
-git clone https://github.com/Zxce3/drawaudio-tmp.git
-cd drawaudio-tmp
+git clone https://github.com/Zxce3/drawaudio.git
+cd drawaudio
 bun install
 bun run dev
 ```

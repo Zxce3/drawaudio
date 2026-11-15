@@ -1,5 +1,12 @@
 {
   "name": "drawaudio",
+  "description": "Draw notes on a grid and hear them as music. A multi-track sequencer and synth for the browser that works offline.",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Zxce3/drawaudio.git"
+  },
+  "homepage": "https://drawaudio.zxce3.net/",
+  "license": "MIT",
   "private": true,
   "version": "0.0.1",
   "type": "module",
