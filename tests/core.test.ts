@@ -110,27 +110,63 @@ test('sanitize accepts new playback and delay modes', () => {
   expect(s.tracks[0].params.wavetable).toBe('vocal');
 });
 
-import { EXAMPLE_SONGS, RAW_SPECS, SPEC_STEP_COUNT } from '../src/lib/songs';
+import { EXAMPLE_SONGS, RAW_SPECS, parseSteps } from '../src/lib/songs';
 
-test('there are 10 valid example songs', () => {
-  expect(EXAMPLE_SONGS.length).toBe(10);
-  expect(new Set(EXAMPLE_SONGS.map((s) => s.id)).size).toBe(10);
+test('there are 20 valid example songs across three grid sizes', () => {
+  expect(EXAMPLE_SONGS.length).toBe(20);
+  expect(new Set(EXAMPLE_SONGS.map((s) => s.id)).size).toBe(20);
+  for (const size of [16, 32, 64]) expect(EXAMPLE_SONGS.filter((s) => s.size === size).length).toBe(size === 16 ? 10 : 5);
   for (const spec of RAW_SPECS) {
     for (const t of spec.tracks) {
-      const tokens = t.steps.trim().split(/\s+/);
-      expect(tokens.length).toBe(SPEC_STEP_COUNT);
-      for (const tok of tokens) if (tok !== '.') for (const n of tok.split(',')) expect(Number(n)).toBeGreaterThanOrEqual(0);
+      const tokens = parseSteps(t.steps);
+      expect(tokens.length).toBe(spec.size ?? 16);
+      for (const tok of tokens) {
+        if (tok === '.') continue;
+        for (const n of tok.split(',')) expect(/^[A-G][#b]?\d$/.test(n) || Number(n) >= 0).toBe(true);
+      }
     }
   }
   for (const example of EXAMPLE_SONGS) {
     const song = example.create();
+    expect(song.gridSize).toBe(example.size);
     expect(song.tracks.length).toBeGreaterThan(0);
-    for (const track of song.tracks) expect(track.matrix.flat().some(Boolean)).toBe(true);
-    // survives the same validation as shared links
+    for (const track of song.tracks) {
+      expect(track.matrix.length).toBe(example.size);
+      expect(track.matrix.flat().some(Boolean)).toBe(true);
+    }
     const clean = sanitizeSong(JSON.parse(JSON.stringify(toCompact(song))));
     expect(clean.scale).toBe(song.scale);
+    expect(clean.gridSize).toBe(song.gridSize);
     expect(clean.tracks.length).toBe(song.tracks.length);
     expect(clean.tracks[0].matrix).toEqual(song.tracks[0].matrix);
     expect(clean.effects.delayMode).toBe(song.effects.delayMode);
+  }
+});
+
+test('named notes land on the right pitch', () => {
+  const song = EXAMPLE_SONGS.find((s) => s.id === 'harbor-lights')!.create();
+  const bass = song.tracks[1];
+  const rowOf = (col: number) => bass.matrix.findIndex((row) => row[col]);
+  const midi = (col: number) => getRowPitch(song.scale, song.gridSize, rowOf(col)).midi;
+  expect(midi(0)).toBe(48); // C3
+  expect(midi(6)).toBe(43); // G2
+  expect(midi(13)).toBe(46); // Bb2
+});
+
+test('every named note in every example is in its scale (no silent snapping)', () => {
+  const offsets: Record<string, number> = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
+  for (const spec of RAW_SPECS) {
+    const size = spec.size ?? 16;
+    const reachable = new Set(Array.from({ length: size }, (_, row) => getRowPitch(spec.scale, size, row).midi));
+    for (const t of spec.tracks) {
+      for (const tok of parseSteps(t.steps)) {
+        for (const n of tok === '.' ? [] : tok.split(',')) {
+          const m = /^([A-G])(#|b)?(\d)$/.exec(n);
+          if (!m) continue;
+          const midi = 12 * (Number(m[3]) + 1) + offsets[m[1]] + (m[2] === '#' ? 1 : m[2] === 'b' ? -1 : 0);
+          if (!reachable.has(midi)) throw new Error(`${spec.name}/${t.name}: ${n} is not available in ${spec.scale} on a ${size} grid`);
+        }
+      }
+    }
   }
 });

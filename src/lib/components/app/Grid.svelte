@@ -136,6 +136,7 @@
     ctx.fillRect(0, 0, width, height);
 
     // Row bands: root notes get a light band, like piano-roll octave rows
+    let previousNote = '';
     for (let row = 0; row < size; row++) {
       const pitch = getRowPitch(song.scale, size, row);
       const y = row * cellH;
@@ -145,7 +146,10 @@
       }
       ctx.fillStyle = pitch.isRoot ? css(styles, '--accent') : card;
       ctx.fillRect(0, y, GUTTER - 1, cellH);
-      const label = size <= 16 || pitch.isRoot ? formatNote(pitch) : '';
+      // Dense grids repeat pitches on neighbouring rows: label each pitch once
+      const note = formatNote(pitch);
+      const label = (size <= 16 || pitch.isRoot) && note !== previousNote ? note : '';
+      previousNote = note;
       if (label && cellH >= 7) {
         ctx.fillStyle = pitch.isRoot ? css(styles, '--foreground') : muted;
         ctx.font = `${Math.min(11, Math.max(8, cellH - 3))}px ui-monospace, monospace`;

@@ -106,20 +106,25 @@
 
   <section class="space-y-2">
     <h3 class="text-sm font-medium">Example songs</h3>
-    <ul class="space-y-1">
-      {#each EXAMPLE_SONGS as example (example.id)}
-        <li>
-          <button
-            type="button"
-            onclick={() => loadExample(example)}
-            class="bg-card hover:bg-accent focus-visible:ring-ring w-full rounded-md border px-3 py-2 text-left focus-visible:ring-2 focus-visible:outline-none"
-          >
-            <span class="block text-sm">{example.name}</span>
-            <span class="text-muted-foreground block text-xs">{example.description}</span>
-          </button>
-        </li>
-      {/each}
-    </ul>
+    {#each [16, 32, 64] as size}
+      <h4 class="text-muted-foreground pt-1 text-xs font-medium tracking-wide uppercase">
+        {size}×{size} · {size / 16} {size === 16 ? 'bar' : 'bars'}
+      </h4>
+      <ul class="space-y-1">
+        {#each EXAMPLE_SONGS.filter((e) => e.size === size) as example (example.id)}
+          <li>
+            <button
+              type="button"
+              onclick={() => loadExample(example)}
+              class="bg-card hover:bg-accent focus-visible:ring-ring w-full rounded-md border px-3 py-2 text-left focus-visible:ring-2 focus-visible:outline-none"
+            >
+              <span class="block text-sm">{example.name}</span>
+              <span class="text-muted-foreground block text-xs">{example.description}</span>
+            </button>
+          </li>
+        {/each}
+      </ul>
+    {/each}
   </section>
 
   <section class="space-y-2">
