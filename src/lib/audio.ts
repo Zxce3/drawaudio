@@ -91,6 +91,9 @@ export class AudioEngine {
   private compressor!: DynamicsCompressorNode;
   private analyser!: AnalyserNode;
   private meterData = new Uint8Array(0);
+  private vizAnalyser: AnalyserNode | null = null;
+  private freqData = new Uint8Array(0);
+  private waveData = new Float32Array(0);
 
   // Sequencer state
   private playing = false;
@@ -267,6 +270,12 @@ export class AudioEngine {
     this.bus.connect(this.delayIn);
     this.convolver.connect(this.reverbMix).connect(this.compressor);
     this.compressor.connect(this.analyser);
+    this.vizAnalyser = ctx.createAnalyser();
+    this.vizAnalyser.fftSize = 2048;
+    this.vizAnalyser.smoothingTimeConstant = 0.75;
+    this.freqData = new Uint8Array(this.vizAnalyser.frequencyBinCount);
+    this.waveData = new Float32Array(this.vizAnalyser.fftSize);
+    this.compressor.connect(this.vizAnalyser);
     this.compressor.connect(ctx.destination);
 
     this.noiseBuffer = this.makeNoise(ctx);
@@ -500,6 +509,34 @@ export class AudioEngine {
       curve[i] = ((3 + amount) * x * 20 * (Math.PI / 180)) / (Math.PI + amount * Math.abs(x));
     }
     return curve;
+  }
+
+  /**
+   * Spectrum in `count` log-spaced bands (40 Hz - 14 kHz), each 0 - 1.
+   * Returns false until the audio engine is running.
+   */
+  getBands(out: Float32Array): boolean {
+    if (!this.vizAnalyser || !this.ctx) return false;
+    this.vizAnalyser.getByteFrequencyData(this.freqData as Uint8Array<ArrayBuffer>);
+    const binHz = this.ctx.sampleRate / this.vizAnalyser.fftSize;
+    const lo = Math.log(40);
+    const hi = Math.log(14000);
+    for (let i = 0; i < out.length; i++) {
+      const from = Math.max(1, Math.floor(Math.exp(lo + ((hi - lo) * i) / out.length) / binHz));
+      const to = Math.max(from + 1, Math.ceil(Math.exp(lo + ((hi - lo) * (i + 1)) / out.length) / binHz));
+      let sum = 0;
+      for (let b = from; b < to && b < this.freqData.length; b++) sum += this.freqData[b];
+      // Tilt upwards a little: high bands carry less energy in music
+      out[i] = Math.min(1, (sum / (to - from) / 255) * (1 + (i / out.length) * 0.8));
+    }
+    return true;
+  }
+
+  /** Oscilloscope samples, -1 to 1 */
+  getWaveform(): Float32Array | null {
+    if (!this.vizAnalyser) return null;
+    this.vizAnalyser.getFloatTimeDomainData(this.waveData as Float32Array<ArrayBuffer>);
+    return this.waveData;
   }
 
   /** Master output level, 0 - 1 */

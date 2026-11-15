@@ -4,9 +4,11 @@
   import { Button } from '$lib/components/ui/button';
   import ParamSlider from './ParamSlider.svelte';
   import Section from './Section.svelte';
-  import { ui, transpose, generatePattern, clearTrack } from '$lib/song.svelte';
+  import OptionGrid from './OptionGrid.svelte';
+  import { ui, transpose, generatePattern, clearTrack, VIZ_STYLES, type VizStyle } from '$lib/song.svelte';
 
   let density = $state(0.4);
+  const vizOptions = VIZ_STYLES.map((v) => ({ value: v, label: v[0].toUpperCase() + v.slice(1) }));
 </script>
 
 <div>
@@ -17,6 +19,12 @@
     </ToggleGroup.Root>
     <p class="text-muted-foreground text-xs">Drag across the grid to paint. Right-click erases. Click a lit cell to remove it.</p>
     <Button variant="outline" class="w-full gap-2" onclick={clearTrack}><Eraser class="size-4" /> Clear active track</Button>
+  </Section>
+
+  <Section title="Visualizer">
+    <OptionGrid label="Visualizer style" cols={5} options={vizOptions} value={ui.vizStyle} onchange={(v) => (ui.vizStyle = v as VizStyle)} />
+    <ParamSlider label="Opacity" bind:value={ui.vizOpacity} min={0.1} max={1} format={(v) => `${Math.round(v * 100)}%`} />
+    <p class="text-muted-foreground text-xs">The music is drawn behind the grid while it plays. Turn it off to save battery.</p>
   </Section>
 
   <Section title="Pattern generator">

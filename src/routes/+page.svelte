@@ -4,12 +4,13 @@
   import Grid from '$lib/components/app/Grid.svelte';
   import SidePanel from '$lib/components/app/SidePanel.svelte';
   import TrackStrip from '$lib/components/app/TrackStrip.svelte';
-  import { song, commit, undo, redo, togglePlay, getEngine, disposeEngine, replaceSong } from '$lib/song.svelte';
+  import { song, ui, commit, undo, redo, togglePlay, getEngine, disposeEngine, replaceSong } from '$lib/song.svelte';
   import { decodeShare, sanitizeSong, toCompact } from '$lib/storage';
   import { EXAMPLE_SONGS } from '$lib/songs';
   import { updateSeo } from '$lib/seo';
 
   const AUTOSAVE_KEY = 'drawaudio:autosave';
+  const VIZ_KEY = 'drawaudio:viz';
 
   updateSeo({
     title: 'DrawAudio - Create Music by Drawing',
@@ -20,6 +21,18 @@
   let ready = $state(false);
 
   onMount(() => {
+    // Visualizer preferences are per browser, not part of a song
+    try {
+      const prefs = JSON.parse(localStorage.getItem(VIZ_KEY) ?? 'null');
+      if (prefs && ['off', 'bars', 'circle', 'wave', 'glow'].includes(prefs.style)) {
+        ui.vizStyle = prefs.style;
+        if (typeof prefs.opacity === 'number') ui.vizOpacity = Math.min(1, Math.max(0.1, prefs.opacity));
+      } else if (matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        ui.vizStyle = 'off';
+      }
+    } catch {
+      /* ignore unreadable preferences */
+    }
     (async () => {
       try {
         const shared = location.hash.match(/^#s=(.+)$/)?.[1];
@@ -46,6 +59,16 @@
     JSON.stringify(song.effects);
     song.tempo;
     if (ready) getEngine().applyEffects();
+  });
+
+  $effect(() => {
+    const prefs = JSON.stringify({ style: ui.vizStyle, opacity: ui.vizOpacity });
+    if (!ready) return;
+    try {
+      localStorage.setItem(VIZ_KEY, prefs);
+    } catch {
+      /* best effort */
+    }
   });
 
   // Autosave, debounced

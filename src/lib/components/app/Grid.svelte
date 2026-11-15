@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import Visualizer from './Visualizer.svelte';
   import { song, ui, activeTrack, setCell, commit, previewCell, ensureAudio } from '$lib/song.svelte';
   import { getRowPitch, formatNote } from '$lib/scales';
 
@@ -132,8 +133,8 @@
     const muted = css(styles, '--muted-foreground');
     const card = css(styles, '--card');
 
-    ctx.fillStyle = css(styles, '--background');
-    ctx.fillRect(0, 0, width, height);
+    // Transparent: the visualizer and background colour show through the grid
+    ctx.clearRect(0, 0, width, height);
 
     // Row bands: root notes get a light band, like piano-roll octave rows
     let previousNote = '';
@@ -239,12 +240,13 @@
   });
 </script>
 
-<div bind:this={container} class="bg-card relative min-h-64 min-w-0 flex-1 overflow-hidden rounded-lg border">
+<div bind:this={container} class="bg-background relative min-h-64 min-w-0 flex-1 overflow-hidden rounded-lg border">
+  <Visualizer />
   <!-- svelte-ignore a11y_no_interactive_element_to_noninteractive_role -->
   <canvas
     bind:this={canvas}
     style="width: {width}px; height: {height}px;"
-    class="block touch-none outline-none select-none {ui.tool === 'erase' ? 'cursor-cell' : 'cursor-crosshair'}"
+    class="relative block touch-none outline-none select-none {ui.tool === 'erase' ? 'cursor-cell' : 'cursor-crosshair'}"
     role="application"
     tabindex="0"
     aria-label="Note grid for {activeTrack().name}. Arrow keys move, Enter toggles a note, Delete erases."

@@ -1,10 +1,11 @@
 <script lang="ts">
-  import { Play, Square, Eraser, Undo2, Redo2, ChevronLeft, ChevronRight, Music } from '@lucide/svelte';
+  import { Play, Square, Eraser, Undo2, Redo2, ChevronLeft, ChevronRight, Music, Info } from '@lucide/svelte';
   import { Button } from '$lib/components/ui/button';
   import { Slider } from '$lib/components/ui/slider';
   import { Separator } from '$lib/components/ui/separator';
   import Choice from './Choice.svelte';
   import IconButton from './IconButton.svelte';
+  import AboutDialog from './AboutDialog.svelte';
   import {
     song, ui, clearTrack, commit, undo, redo, togglePlay, setGridSize, stepScale, tapTempo, scaleNames, getEngine
   } from '$lib/song.svelte';
@@ -22,6 +23,7 @@
   });
   const time = $derived(`${Math.floor(ui.elapsed / 60)}:${(ui.elapsed % 60).toFixed(1).padStart(4, '0')}`);
 
+  let aboutOpen = $state(false);
   let level = $state(0);
   $effect(() => {
     if (!ui.playing) {
@@ -85,7 +87,12 @@
     <Choice label="Scale" class="w-44" value={song.scale} options={scaleOptions} onchange={(v) => { song.scale = v; commit(); }} />
     <IconButton icon={ChevronRight} label="Next scale" onclick={() => stepScale(1)} />
   </div>
+
+  <div class="ml-auto">
+    <IconButton icon={Info} label="About DrawAudio" onclick={() => (aboutOpen = true)} />
+  </div>
 </header>
+<AboutDialog bind:open={aboutOpen} />
 {#if ui.audioError}
   <p role="alert" class="bg-destructive/20 text-destructive px-3 py-1.5 text-sm">Audio could not start: {ui.audioError}</p>
 {/if}

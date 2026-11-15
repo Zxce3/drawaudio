@@ -21,8 +21,13 @@ export const ui = $state({
   tool: 'draw' as 'draw' | 'erase',
   canUndo: false,
   canRedo: false,
-  audioError: ''
+  audioError: '',
+  vizStyle: 'bars' as VizStyle,
+  vizOpacity: 0.3
 });
+
+export type VizStyle = 'off' | 'bars' | 'circle' | 'wave' | 'glow';
+export const VIZ_STYLES: VizStyle[] = ['off', 'bars', 'circle', 'wave', 'glow'];
 
 export const MAX_TRACKS = 8;
 export const scaleNames = Object.keys(SCALES);
