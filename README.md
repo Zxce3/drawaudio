@@ -43,7 +43,7 @@ A multi-track sequencer and synthesizer that runs entirely in your browser and w
 - Distortion, **bitcrusher**, chorus, stereo spread, ring mod, **sidechain** pumping, **tape** (wow, flutter, saturation, hiss), **vinyl** crackle, and a 3-band EQ.
 
 **Songs**
-- **20 example songs** on 16×16, 32×32 and 64×64 grids.
+- **21 example songs** on 16×16, 32×32 and 64×64 grids.
 - Autosave, songs saved in your browser, and **share links** that contain the whole song in the URL.
 - **MIDI import and export**, **WAV recording** (press <kbd>R</kbd>), and one-click render of a clean loop with its effect tails.
 
@@ -130,7 +130,7 @@ With the grid focused, use the arrow keys to move, <kbd>Enter</kbd> to toggle a 
 | --- | --- |
 | **16×16** (1 bar) | First Light · Midnight Drive · Chip Quest · Rain on Glass · Dorian Groove · Temple Bells · Neon Pulse · Lofi Window · Desert Wind · Sunrise Reggae |
 | **32×32** (2 bars) | Harbor Lights · Glass Cathedral · Brass Knuckle · Paper Boats · Iron Orchard |
-| **64×64** (4 bars) | Long Road Home · Static Bloom · Neon Harbor · Ember Caravan · Skyline Run |
+| **64×64** (4 bars) | Long Road Home · Static Bloom · Neon Harbor · Ember Caravan · Skyline Run · Warm Heart Riddim |
 
 Loading an example is undoable with <kbd>Ctrl</kbd>+<kbd>Z</kbd>. Songs are defined in [`src/lib/songs.ts`](src/lib/songs.ts) using a small text notation, so adding your own is easy.
 
@@ -171,7 +171,7 @@ src/
 │   ├── song.svelte.ts      Reactive song state, undo/redo, playback, recording
 │   ├── types.ts            Song model, defaults, presets and validation limits
 │   ├── scales.ts           Scales and the row-to-pitch mapping
-│   ├── songs.ts            The 20 example songs
+│   ├── songs.ts            The 21 example songs
 │   ├── storage.ts          Local saves, share links, input validation
 │   ├── midi.ts · wav.ts    MIDI and WAV encoders and parsers
 │   ├── wavetables.ts       Morphing wavetable data
@@ -201,7 +201,7 @@ DrawAudio is a progressive web app. After the first visit, a service worker keep
 The editor is a canvas app, so the site also ships real content pages that search engines can read:
 
 - **`/`** has a descriptive title and description, one `h1`, a plain-language About section and `WebApplication` structured data.
-- **`/examples/`** and **`/examples/<song>/`** give each of the 20 example songs its own page with a piano-roll preview, key facts and an *Open in DrawAudio* link (`/?song=<id>`).
+- **`/examples/`** and **`/examples/<song>/`** give each of the 21 example songs its own page with a piano-roll preview, key facts and an *Open in DrawAudio* link (`/?song=<id>`).
 - A **sitemap** is generated at build time (`/sitemap.xml`), with a canonical URL, Open Graph and Twitter tags on every page, and a 1200×630 social image.
 - `bun run audit:seo` checks all of this against the built site and fails the build pipeline if a page regresses.
 - Going live in Google and Bing takes a few clicks, described in [docs/search-console.md](docs/search-console.md). The site reads optional verification tokens from the `GOOGLE_SITE_VERIFICATION` and `BING_SITE_VERIFICATION` repository variables.

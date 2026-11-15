@@ -75,7 +75,7 @@ export const TOUR: TourStep[] = [
   {
     target: 'panel',
     title: 'Song: keep and share',
-    text: 'Load one of 20 example songs, save your own, copy a share link, export or import MIDI, or render a loop to WAV. Your work also autosaves in this browser.',
+    text: 'Load one of 21 example songs, save your own, copy a share link, export or import MIDI, or render a loop to WAV. Your work also autosaves in this browser.',
     tab: 'song'
   },
   {

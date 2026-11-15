@@ -20,7 +20,7 @@ property with a DNS TXT record (the domain's DNS is on Cloudflare, so this is a 
 
 ## 2. Submit the sitemap
 
-In Search Console open **Sitemaps** and submit `sitemap.xml`. It lists the home page, `/examples/` and the 20 example
+In Search Console open **Sitemaps** and submit `sitemap.xml`. It lists the home page, `/examples/` and the 21 example
 song pages. Google reports how many were discovered.
 
 ## 3. Ask for indexing of the key pages

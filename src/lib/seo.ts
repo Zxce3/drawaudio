@@ -17,13 +17,13 @@ export const SITE = {
 
 export const HOME_TITLE = 'DrawAudio – Free Online Music Maker & Step Sequencer';
 export const HOME_DESCRIPTION =
-  'Draw notes on a grid and hear them as music. A free multi-track music maker and synth in your browser. 20 example songs, MIDI and WAV export. Works offline.';
+  'Draw notes on a grid and hear them as music. A free multi-track music maker and synth in your browser. 21 example songs, MIDI and WAV export. Works offline.';
 
 export const FEATURES = [
   'Piano-roll grid from 8×8 to 64×64 with 18 musical scales',
   'Up to 8 tracks with synth, wavetable, FM, filters and envelopes',
   'Reverb, delay, bitcrusher, chorus, tape, vinyl and sidechain effects',
-  '20 example songs, share links, and MIDI and WAV export',
+  '21 example songs, share links, and MIDI and WAV export',
   'Installable and works offline',
   'Free and open source'
 ] as const;

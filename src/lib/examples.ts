@@ -41,9 +41,9 @@ export function exampleInfo(example: ExampleSong): ExampleInfo {
 
 export const ALL_EXAMPLES = EXAMPLE_SONGS.map(exampleInfo);
 
-export const EXAMPLES_TITLE = 'Example Songs: 20 Free Music Maker Templates | DrawAudio';
+export const EXAMPLES_TITLE = 'Example Songs: 21 Free Music Maker Templates | DrawAudio';
 export const EXAMPLES_DESCRIPTION =
-  '20 ready-made songs for DrawAudio on 16×16, 32×32 and 64×64 grids: lo-fi, synthwave, chiptune, ambient and more. Open any in your browser and remix it.';
+  '21 ready-made songs for DrawAudio on 16×16, 32×32 and 64×64 grids: lo-fi, synthwave, chiptune, ambient and more. Open any in your browser and remix it.';
 
 export function examplesSeo(): PageSeo {
   return {

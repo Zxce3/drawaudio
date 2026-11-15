@@ -133,6 +133,6 @@
   </ul>
   <h2>Example songs</h2>
   <p>
-    Browse the <a href="{base}/examples/">20 example songs</a> for ideas: lo-fi, synthwave, chiptune, ambient and more, each one opens in the editor.
+    Browse the <a href="{base}/examples/">21 example songs</a> for ideas: lo-fi, synthwave, chiptune, ambient and more, each one opens in the editor.
   </p>
 </aside>

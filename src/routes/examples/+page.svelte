@@ -15,7 +15,7 @@
   <nav aria-label="Breadcrumb" class="text-muted-foreground mb-4 text-sm"><a class="hover:text-foreground" href="{base}/">DrawAudio</a> › Example songs</nav>
   <h1 class="text-3xl font-semibold tracking-tight sm:text-4xl">Example songs</h1>
   <p class="text-muted-foreground mt-3 max-w-2xl">
-    Twenty ready-made songs for the DrawAudio music maker, from lo-fi and synthwave to chiptune and ambient. Open any of them in your browser, change a few
+    Twenty-one ready-made songs for the DrawAudio music maker, from lo-fi and synthwave to chiptune and ambient. Open any of them in your browser, change a few
     notes, swap the sound, and make it yours. Everything is free and works offline.
   </p>
 

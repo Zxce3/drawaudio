@@ -595,6 +595,87 @@ const SPECS: SongSpec[] = [
       }
     ]
   }
+  ,
+  {
+    name: 'Warm Heart Riddim',
+    description: 'Original one-drop reggae in C major: offbeat skank, bubbling organ and dub echoes (4 bars)',
+    size: 64,
+    tempo: 76,
+    scale: 'Major',
+    humanizeTiming: 0.12,
+    humanizeVelocity: 0.15,
+    effects: {
+      reverbMix: 0.35,
+      delayMode: 'pingpong',
+      delaySync: true,
+      delayDivision: '1/8d',
+      delayFeedback: 0.45,
+      delayMix: 0.3,
+      tapeEnabled: true,
+      tapeWow: 0.25,
+      tapeSaturation: 0.3,
+      tapeHiss: 0.1
+    },
+    tracks: [
+      {
+        // One drop: the kick and the rim both land only on beat three
+        name: 'Kick',
+        steps: ['. . . . . . . . C2', '. . . . . . . . C2', '. . . . . . . . C2', '. . . . . . . . C2 . . . . . C2'],
+        sound: ['Clean', { waveform: 'sine', pitchEnvEnabled: true, pitchEnvSemitones: 20, pitchEnvTime: 0.1, attack: 0.001, decay: 0.18, sustain: 0, release: 0.12, cutoff: 6000, gate: 0.35 }],
+        volume: 0.9,
+        reverb: 0.1
+      },
+      {
+        name: 'Rim',
+        steps: ['. . . . . . . . G5', '. . . . . . . . G5', '. . . . . . . . G5', '. . . . . . . . G5'],
+        sound: ['Noise', { waveform: 'square', noiseLevel: 0.85, attack: 0.001, decay: 0.05, sustain: 0, release: 0.06, cutoff: 7000, gate: 0.12 }],
+        volume: 0.45,
+        pan: 0.1,
+        reverb: 0.4
+      },
+      {
+        name: 'Hats',
+        steps: ['A6 . A6 . A6 . A6 . A6 . A6 . A6 . A6 .', 'A6 . A6 . A6 . A6 . A6 . A6 . A6 . A6 .', 'A6 . A6 . A6 . A6 . A6 . A6 . A6 . A6 .', 'A6 . A6 . A6 . A6 . A6 . A6 . A6 . A6 A6'],
+        sound: ['Noise', { noiseLevel: 0.9, gate: 0.1, hpEnabled: true, hpCutoff: 6000 }],
+        volume: 0.22,
+        pan: 0.25,
+        reverb: 0.15
+      },
+      {
+        name: 'Bass',
+        steps: ['C3 . . C3 . . . . . . G2 . C3 . . .', 'F3 . . F3 . . . . . . C3 . F3 . . .', 'C3 . . C3 . . . . . . G2 . C3 . E3 .', 'G2 . . G2 . . . . . . D3 . G2 . B2 .'],
+        sound: ['Bass', { waveform: 'sine', subLevel: 0.5, cutoff: 700, attack: 0.01, decay: 0.2, sustain: 0.6, release: 0.15, gate: 0.75 }],
+        volume: 0.85,
+        reverb: 0
+      },
+      {
+        // Chords chopped on every offbeat: the "skank"
+        name: 'Skank',
+        steps: ['. . C4 . . . C4 . . . C4 . . . C4 .', '. . F4 . . . F4 . . . F4 . . . F4 .', '. . C4 . . . C4 . . . C4 . . . C4 .', '. . G3 . . . G3 . . . G3 . . . G3 .'],
+        sound: ['Pluck', { waveform: 'square', chordEnabled: true, gate: 0.22, cutoff: 2600, attack: 0.002, release: 0.08 }],
+        volume: 0.5,
+        pan: -0.3,
+        reverb: 0.3
+      },
+      {
+        // The organ "bubble"
+        name: 'Organ',
+        steps: ['C4 . . C4 . . . . C4 . . C4', 'F4 . . F4 . . . . F4 . . F4', 'C4 . . C4 . . . . C4 . . C4', 'G3 . . G3 . . . . G3 . . G3'],
+        sound: ['Pad', { waveform: 'wavetable', wavetable: 'organ', wavetablePos: 0.4, chordEnabled: true, gate: 0.3, attack: 0.005, release: 0.1, sustain: 0.6, cutoff: 3500 }],
+        volume: 0.45,
+        pan: 0.3,
+        reverb: 0.25
+      },
+      {
+        name: 'Melody',
+        steps: ['. . E5 . G5 . . . A5 . G5 . E5', '. . F5 . A5 . . . C6 . A5 . F5', '. . E5 . G5 . . . A5 . C6 . B5 . A5', 'G5 . . . D5 . E5'],
+        sound: ['Lead', { waveform: 'triangle', unison: 1, glide: 0.2, attack: 0.02, release: 0.3, gate: 0.85 }],
+        volume: 0.5,
+        pan: 0.1,
+        reverb: 0.5
+      }
+    ]
+  }
 ];
 
 export interface ExampleSong {

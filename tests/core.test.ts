@@ -112,10 +112,10 @@ test('sanitize accepts new playback and delay modes', () => {
 
 import { EXAMPLE_SONGS, RAW_SPECS, parseSteps } from '../src/lib/songs';
 
-test('there are 20 valid example songs across three grid sizes', () => {
-  expect(EXAMPLE_SONGS.length).toBe(20);
-  expect(new Set(EXAMPLE_SONGS.map((s) => s.id)).size).toBe(20);
-  for (const size of [16, 32, 64]) expect(EXAMPLE_SONGS.filter((s) => s.size === size).length).toBe(size === 16 ? 10 : 5);
+test('there are 21 valid example songs across three grid sizes', () => {
+  expect(EXAMPLE_SONGS.length).toBe(21);
+  expect(new Set(EXAMPLE_SONGS.map((s) => s.id)).size).toBe(21);
+  for (const size of [16, 32, 64]) expect(EXAMPLE_SONGS.filter((s) => s.size === size).length).toBe(size === 16 ? 10 : size === 32 ? 5 : 6);
   for (const spec of RAW_SPECS) {
     for (const t of spec.tracks) {
       const tokens = parseSteps(t.steps);
