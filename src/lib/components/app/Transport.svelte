@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Play, Square, Eraser, Undo2, Redo2, ChevronLeft, ChevronRight, Music, Info, Circle, BookOpen } from '@lucide/svelte';
+  import { Play, Square, Eraser, Undo2, Redo2, ChevronLeft, ChevronRight, Music, Info, Circle, BookOpen, Download, WifiOff, LoaderCircle } from '@lucide/svelte';
   import { Button } from '$lib/components/ui/button';
   import { Slider } from '$lib/components/ui/slider';
   import { Separator } from '$lib/components/ui/separator';
@@ -7,6 +7,7 @@
   import IconButton from './IconButton.svelte';
   import AboutDialog from './AboutDialog.svelte';
   import HelpTip from './HelpTip.svelte';
+  import { pwa, install } from '$lib/pwa.svelte';
   import {
     song, ui, clearTrack, commit, undo, redo, togglePlay, toggleRecording, setGridSize, stepScale, tapTempo, scaleNames, getEngine
   } from '$lib/song.svelte';
@@ -61,7 +62,7 @@
 
   <div class="flex items-center gap-1">
     <Button data-guide="play" onclick={togglePlay} variant={ui.playing ? 'secondary' : 'default'} class="w-24 gap-2" aria-keyshortcuts="Space">
-      {#if ui.playing}<Square class="size-4" /> Stop{:else}<Play class="size-4" /> Play{/if}
+      {#if ui.audioLoading}<LoaderCircle class="size-4 animate-spin" /> Loading{:else if ui.playing}<Square class="size-4" /> Stop{:else}<Play class="size-4" /> Play{/if}
     </Button>
     <IconButton icon={Circle} label={ui.recording ? 'Stop recording and save WAV (R)' : 'Record to WAV (R)'} onclick={toggleRecording} guide="record" pressed={ui.recording} disabled={ui.rendering} />
     {#if ui.recording}
@@ -96,6 +97,14 @@
   </div>
 
   <div class="ml-auto flex items-center gap-1">
+    {#if !pwa.online}
+      <span class="text-muted-foreground bg-card flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs" role="status">
+        <WifiOff class="size-3.5" /> Offline
+      </span>
+    {/if}
+    {#if pwa.canInstall}
+      <Button variant="outline" size="sm" class="gap-1.5" onclick={install}><Download class="size-4" /> Install</Button>
+    {/if}
     <Button variant="outline" size="sm" class="gap-1.5" onclick={() => (ui.tourOpen = true)} data-guide="guide" aria-keyshortcuts="H">
       <BookOpen class="size-4" /> Guide
     </Button>

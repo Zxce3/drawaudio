@@ -69,6 +69,7 @@
             <li>New here? Press the Guide button (or H) for a step-by-step tour, and click any <strong>?</strong> icon for a plain-language explanation of that control.</li>
             <li>Press R to record what you hear to a WAV file, or render a clean loop from the Song tab.</li>
             <li>The music is drawn behind the grid. Change or turn off the visualizer in the Tools tab.</li>
+            <li>DrawAudio works offline once it has loaded. Install it from your browser's menu (or the Install button; on iPhone use Share → Add to Home Screen) to open it like an app.</li>
             <li>The grid is bigger and slower on 64×64; try 16×16 or 32×32 on older phones.</li>
           </ul>
         </section>

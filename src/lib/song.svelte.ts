@@ -24,6 +24,7 @@ export const ui = $state({
   canUndo: false,
   canRedo: false,
   audioError: '',
+  audioLoading: false,
   aboutOpen: false,
   tourOpen: false,
   tourPrompt: false,
@@ -223,12 +224,16 @@ export function getEngine(): AudioEngine {
 /** Start the audio engine (needs a user gesture) */
 export async function ensureAudio(): Promise<boolean> {
   try {
+    // Decoding the reverb impulses can take a moment on first use
+    ui.audioLoading = !getEngine().initialized;
     await getEngine().initialize();
     ui.audioError = '';
     return true;
   } catch (error) {
     ui.audioError = error instanceof Error ? error.message : 'Audio could not be started';
     return false;
+  } finally {
+    ui.audioLoading = false;
   }
 }
 

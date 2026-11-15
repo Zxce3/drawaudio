@@ -1,9 +1,14 @@
 <script lang="ts">
 	import '../app.css';
 	import * as Tooltip from '$lib/components/ui/tooltip';
+	import { onMount } from 'svelte';
+	import { initPwa } from '$lib/pwa.svelte';
+	import PwaStatus from '$lib/components/app/PwaStatus.svelte';
 	import { DEFAULT_SEO, generateSeoTags, type SeoProps } from '$lib/seo';
 	
 	let { children } = $props();
+
+	onMount(initPwa);
 	
 	let seo: SeoProps = $state(DEFAULT_SEO);
 	
@@ -47,3 +52,4 @@
 <Tooltip.Provider delayDuration={300}>
 	{@render children()}
 </Tooltip.Provider>
+<PwaStatus />

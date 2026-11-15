@@ -53,6 +53,17 @@
     return disposeEngine;
   });
 
+  // Dismiss the loading screen (see app.html) once the saved song is in place
+  $effect(() => {
+    if (!ready) return;
+    requestAnimationFrame(() => {
+      const splash = document.getElementById('splash');
+      if (!splash) return;
+      splash.classList.add('hide');
+      setTimeout(() => splash.remove(), 450);
+    });
+  });
+
   // Keep the audio graph in step with the song (mixer + effects)
   $effect(() => {
     song.tracks.map((t) => [t.id, t.volume, t.pan, t.reverbSend, t.mute, t.solo]);

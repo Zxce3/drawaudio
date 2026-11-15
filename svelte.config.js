@@ -8,7 +8,9 @@ const config = {
 	preprocess: vitePreprocess(),
 
 	kit: {
-		adapter: adapter()
+		adapter: adapter(),
+		// Registered by hand in src/lib/pwa.svelte.ts so the page can offer "Reload" on updates
+		serviceWorker: { register: false }
 	}
 };
 
