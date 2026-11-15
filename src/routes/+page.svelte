@@ -42,6 +42,7 @@
   });
   $effect(() => {
     JSON.stringify(song.effects);
+    song.tempo;
     if (ready) getEngine().applyEffects();
   });
 

@@ -1,6 +1,20 @@
 import { base } from '$app/paths';
 import { getRowPitch } from './scales';
-import type { Effects, ImpulseType, Song, SoundParams, Track } from './types';
+import type { ChordType, DelayDivision, Effects, ImpulseType, Song, SoundParams, Track } from './types';
+
+const DIVISION_BEATS: Record<DelayDivision, number> = { '1/4': 1, '1/8': 0.5, '1/16': 0.25, '1/8d': 0.75 };
+
+/** Scale-degree offsets above the played note, like stacked thirds */
+const CHORD_DEGREES: Record<ChordType, number[]> = {
+  triad: [0, 2, 4],
+  '7th': [0, 2, 4, 6],
+  '9th': [0, 2, 4, 6, 8],
+  add9: [0, 2, 4, 8],
+  sus2: [0, 1, 4],
+  sus4: [0, 3, 4],
+  power: [0, 4],
+  octave: [0, 7]
+};
 
 interface Channel {
   input: GainNode;
@@ -34,9 +48,21 @@ export class AudioEngine {
   private eqLow!: BiquadFilterNode;
   private eqMid!: BiquadFilterNode;
   private eqHigh!: BiquadFilterNode;
-  private delay!: DelayNode;
-  private delayFeedback!: GainNode;
+  private delayIn!: GainNode;
+  private delayNodes!: { l: DelayNode; r: DelayNode };
+  private delayGains!: Record<'inL' | 'inR' | 'llFb' | 'rrFb' | 'lrFb' | 'rlFb', GainNode>;
+  private delayPans!: { l: StereoPannerNode; r: StereoPannerNode };
   private delayMix!: GainNode;
+  private spreadDelay!: DelayNode;
+  private spreadGain!: GainNode;
+  private spreadPan!: StereoPannerNode;
+  private ringGain!: GainNode;
+  private ringOsc!: OscillatorNode;
+  private ringMix!: GainNode;
+  private ringDry!: GainNode;
+  private reverbKey = '';
+  private lastFreq = new Map<string, number>();
+  private arpIndex = new Map<string, number>();
   private convolver!: ConvolverNode;
   private reverbMix!: GainNode;
   private chorusDelay!: DelayNode;
@@ -121,20 +147,54 @@ export class AudioEngine {
     this.analyser.fftSize = 256;
     this.meterData = new Uint8Array(this.analyser.fftSize);
 
-    this.delay = ctx.createDelay(2);
-    this.delayFeedback = ctx.createGain();
-    this.delayMix = ctx.createGain();
     this.convolver = ctx.createConvolver();
     this.reverbMix = ctx.createGain();
 
+    // Delay: two taps with a feedback matrix, so one graph covers every mode
+    this.delayIn = ctx.createGain();
+    this.delayNodes = { l: ctx.createDelay(2), r: ctx.createDelay(2) };
+    this.delayGains = {
+      inL: ctx.createGain(), inR: ctx.createGain(),
+      llFb: ctx.createGain(), rrFb: ctx.createGain(), lrFb: ctx.createGain(), rlFb: ctx.createGain()
+    };
+    this.delayPans = { l: ctx.createStereoPanner(), r: ctx.createStereoPanner() };
+    this.delayMix = ctx.createGain();
+    const { l, r } = this.delayNodes;
+    const g = this.delayGains;
+    this.delayIn.connect(g.inL).connect(l);
+    this.delayIn.connect(g.inR).connect(r);
+    l.connect(g.llFb).connect(l);
+    r.connect(g.rrFb).connect(r);
+    l.connect(g.lrFb).connect(r);
+    r.connect(g.rlFb).connect(l);
+    l.connect(this.delayPans.l).connect(this.delayMix);
+    r.connect(this.delayPans.r).connect(this.delayMix);
+    this.delayMix.connect(this.compressor);
+
+    // Stereo spread: a short delayed copy panned right
+    this.spreadDelay = ctx.createDelay(0.1);
+    this.spreadDelay.delayTime.value = 0.018;
+    this.spreadGain = ctx.createGain();
+    this.spreadPan = ctx.createStereoPanner();
+    this.spreadPan.pan.value = 1;
+
+    // Ring modulator
+    this.ringGain = ctx.createGain();
+    this.ringGain.gain.value = 0;
+    this.ringOsc = ctx.createOscillator();
+    this.ringOsc.connect(this.ringGain.gain);
+    this.ringOsc.start();
+    this.ringMix = ctx.createGain();
+    this.ringDry = ctx.createGain();
+
     this.bus.connect(this.distortion);
     this.distortion.connect(this.eqLow).connect(this.eqMid).connect(this.eqHigh);
-    this.eqHigh.connect(this.chorusDry).connect(this.master);
+    this.eqHigh.connect(this.ringDry).connect(this.chorusDry).connect(this.master);
+    this.eqHigh.connect(this.ringGain).connect(this.ringMix).connect(this.master);
     this.eqHigh.connect(this.chorusDelay).connect(this.chorusMix).connect(this.master);
     this.master.connect(this.compressor);
-    this.bus.connect(this.delay);
-    this.delay.connect(this.delayFeedback).connect(this.delay);
-    this.delay.connect(this.delayMix).connect(this.compressor);
+    this.master.connect(this.spreadDelay).connect(this.spreadGain).connect(this.spreadPan).connect(this.compressor);
+    this.bus.connect(this.delayIn);
     this.convolver.connect(this.reverbMix).connect(this.compressor);
     this.compressor.connect(this.analyser);
     this.compressor.connect(ctx.destination);
@@ -223,18 +283,70 @@ export class AudioEngine {
     if (!this.ctx) return;
     const e: Effects = this.song.effects;
     const t = this.ctx.currentTime;
-    this.delay.delayTime.setTargetAtTime(Math.max(e.delayTime, 0.01), t, 0.05);
-    this.delayFeedback.gain.setTargetAtTime(Math.min(e.delayFeedback, 0.9), t, 0.05);
-    this.delayMix.gain.setTargetAtTime(e.delayMix, t, 0.05);
-    this.reverbMix.gain.setTargetAtTime(e.reverbMix, t, 0.05);
-    this.chorusMix.gain.setTargetAtTime(e.chorus * 0.7, t, 0.05);
-    this.chorusDry.gain.setTargetAtTime(1 - e.chorus * 0.3, t, 0.05);
-    this.eqLow.gain.setTargetAtTime(e.eqLow, t, 0.05);
-    this.eqMid.gain.setTargetAtTime(e.eqMid, t, 0.05);
-    this.eqHigh.gain.setTargetAtTime(e.eqHigh, t, 0.05);
-    this.distortion.curve = this.distortionCurve(e.distortion);
-    const impulse = this.impulses.get(e.impulse);
-    if (impulse && this.convolver.buffer !== impulse) this.convolver.buffer = impulse;
+    const set = (param: AudioParam, value: number) => param.setTargetAtTime(value, t, 0.05);
+
+    // Delay
+    const beat = 60 / this.song.tempo;
+    let time = e.delaySync ? beat * DIVISION_BEATS[e.delayDivision] : e.delayTime;
+    let feedback = Math.min(e.delayFeedback, 0.9);
+    if (e.delayMode === 'slapback') {
+      time = Math.min(time, 0.12);
+      feedback = 0;
+    }
+    const mode = e.delayMode;
+    const g = this.delayGains;
+    set(g.inL.gain, 1);
+    set(g.inR.gain, mode === 'stereo' ? 1 : 0);
+    set(g.llFb.gain, mode === 'pingpong' ? 0 : feedback);
+    set(g.rrFb.gain, mode === 'stereo' ? feedback : 0);
+    set(g.lrFb.gain, mode === 'pingpong' ? feedback : 0);
+    set(g.rlFb.gain, mode === 'pingpong' ? feedback : 0);
+    set(this.delayNodes.l.delayTime, Math.min(Math.max(time, 0.01), 2));
+    set(this.delayNodes.r.delayTime, Math.min(Math.max(mode === 'stereo' ? time * 1.33 : time, 0.01), 2));
+    const width = mode === 'pingpong' ? 0.85 : mode === 'stereo' ? 0.7 : 0;
+    set(this.delayPans.l.pan, -width);
+    set(this.delayPans.r.pan, width);
+    set(this.delayMix.gain, e.delayEnabled ? e.delayMix : 0);
+
+    // Reverb
+    set(this.reverbMix.gain, e.reverbEnabled ? e.reverbMix : 0);
+    this.updateReverbBuffer(e.impulse, e.reverbDecay);
+
+    // Colour
+    set(this.chorusMix.gain, e.chorusEnabled ? e.chorus * 0.7 : 0);
+    set(this.chorusDry.gain, e.chorusEnabled ? 1 - e.chorus * 0.3 : 1);
+    set(this.spreadGain.gain, e.spreadEnabled ? e.spread * 0.6 : 0);
+    set(this.ringMix.gain, e.ringEnabled ? e.ringMix : 0);
+    set(this.ringDry.gain, e.ringEnabled ? 1 - e.ringMix * 0.5 : 1);
+    set(this.ringOsc.frequency, e.ringFreq);
+    set(this.eqLow.gain, e.eqLow);
+    set(this.eqMid.gain, e.eqMid);
+    set(this.eqHigh.gain, e.eqHigh);
+    this.distortion.curve = this.distortionCurve(e.distortionEnabled ? e.distortion : 0);
+  }
+
+  /** Decay shortens the impulse response with a fade-out so the tail ends smoothly */
+  private updateReverbBuffer(type: ImpulseType, decay: number) {
+    const key = `${type}:${decay.toFixed(2)}`;
+    if (key === this.reverbKey) return;
+    const source = this.impulses.get(type);
+    if (!source || !this.ctx) return;
+    this.reverbKey = key;
+    if (decay >= 0.99) {
+      this.convolver.buffer = source;
+      return;
+    }
+    const length = Math.max(256, Math.floor(source.length * decay));
+    const buffer = this.ctx.createBuffer(source.numberOfChannels, length, source.sampleRate);
+    const fadeStart = Math.floor(length * 0.6);
+    for (let c = 0; c < source.numberOfChannels; c++) {
+      const from = source.getChannelData(c);
+      const to = buffer.getChannelData(c);
+      for (let i = 0; i < length; i++) {
+        to[i] = i < fadeStart ? from[i] : from[i] * (1 - (i - fadeStart) / (length - fadeStart));
+      }
+    }
+    this.convolver.buffer = buffer;
   }
 
   private distortionCurve(amount: number): Float32Array<ArrayBuffer> | null {
@@ -336,16 +448,104 @@ export class AudioEngine {
   }
 
   private playColumn(col: number, time: number, stepDuration: number) {
-    const anySolo = this.song.tracks.some((t) => t.solo);
-    for (const track of this.song.tracks) {
+    const song = this.song;
+    const anySolo = song.tracks.some((t) => t.solo);
+    // Swing delays every second step
+    const swingOffset = col % 2 === 1 ? Math.min(0.75, (song.swing - 0.5) * 2) * stepDuration : 0;
+
+    for (const track of song.tracks) {
       if (track.mute || (anySolo && !track.solo)) continue;
       const channel = this.channels.get(track.id);
       if (!channel) continue;
-      for (let row = 0; row < this.song.gridSize; row++) {
-        if (track.matrix[row]?.[col]) {
-          this.playNote(track, row, time, stepDuration * track.params.gate, channel);
+      const rows: number[] = [];
+      for (let row = song.gridSize - 1; row >= 0; row--) if (track.matrix[row]?.[col]) rows.push(row);
+      if (!rows.length) continue;
+
+      const p = track.params;
+      const freqs = this.expandChords(rows, p);
+      const steps = [1, 2, 4, 8, 16][p.noteLength - 1] ?? 1;
+      const start = time + swingOffset;
+
+      if (p.arpMode !== 'off') {
+        const sequence = this.arpSequence(freqs, p);
+        const slots = Math.max(1, p.arpNotes);
+        const slotDuration = stepDuration / slots;
+        let index = p.arpRetrigger ? 0 : (this.arpIndex.get(track.id) ?? 0);
+        for (let i = 0; i < slots; i++) {
+          const hold = (p.arpFit ? slotDuration : stepDuration * steps) * p.gate;
+          this.voice(track, channel, sequence[index % sequence.length], start + i * slotDuration, hold, stepDuration);
+          index++;
+        }
+        this.arpIndex.set(track.id, index);
+      } else {
+        for (const freq of freqs) {
+          const repeats = Math.max(1, p.ratchet);
+          const sub = stepDuration / repeats;
+          for (let i = 0; i < repeats; i++) {
+            const hold = (repeats > 1 ? sub : stepDuration * steps) * p.gate;
+            this.voice(track, channel, freq, start + i * sub, hold, stepDuration);
+          }
         }
       }
+    }
+  }
+
+  /** Apply timing/velocity humanize, then play */
+  private voice(track: Track, channel: Channel, freq: number, time: number, hold: number, stepDuration: number) {
+    const timing = this.song.humanizeTiming;
+    const velocity = this.song.humanizeVelocity;
+    const jitter = timing > 0 ? (Math.random() - 0.3) * timing * 0.4 * stepDuration : 0;
+    const level = velocity > 0 ? 1 - Math.random() * velocity * 0.6 : 1;
+    this.playNote(track, freq, Math.max(this.ctx!.currentTime, time + jitter), hold, channel, level);
+  }
+
+  private rowFrequency(row: number): number {
+    const size = this.song.gridSize;
+    if (row >= 0) return getRowPitch(this.song.scale, size, row).frequency;
+    // Above the top of the grid: continue one octave higher
+    return getRowPitch(this.song.scale, size, row + 7).frequency * 2;
+  }
+
+  /** Stack scale degrees on every drawn note (rows are scale degrees, row - 1 is one degree up) */
+  private expandChords(rows: number[], p: SoundParams): number[] {
+    if (!p.chordEnabled) return rows.map((row) => this.rowFrequency(row));
+    const out = new Set<number>();
+    for (const row of rows) {
+      const freqs = CHORD_DEGREES[p.chordType].map((deg) =>
+        p.chordType === 'power' && deg === 4 ? this.rowFrequency(row) * 1.498 : this.rowFrequency(row - deg)
+      );
+      freqs.sort((a, b) => a - b);
+      for (let i = 0; i < Math.min(p.chordInversion, freqs.length - 1); i++) freqs[i] *= 2;
+      freqs.forEach((f) => out.add(Math.round(f * 100) / 100));
+    }
+    return [...out].sort((a, b) => a - b);
+  }
+
+  private arpSequence(freqs: number[], p: SoundParams): number[] {
+    const pool: number[] = [];
+    for (let o = 0; o < p.arpOctaves; o++) for (const f of freqs) pool.push(f * 2 ** o);
+    pool.sort((a, b) => a - b);
+    switch (p.arpMode) {
+      case 'down':
+        return [...pool].reverse();
+      case 'updown':
+        return pool.length > 2 ? [...pool, ...pool.slice(1, -1).reverse()] : pool;
+      case 'random':
+        return Array.from({ length: Math.max(pool.length, 8) }, () => pool[Math.floor(Math.random() * pool.length)]);
+      case 'pedal':
+        return pool.flatMap((f) => [pool[0], f]);
+      case 'converge': {
+        const out: number[] = [];
+        for (let i = 0, j = pool.length - 1; i <= j; i++, j--) out.push(pool[i], ...(i === j ? [] : [pool[j]]));
+        return out;
+      }
+      case 'diverge': {
+        const out: number[] = [];
+        for (let i = 0, j = pool.length - 1; i <= j; i++, j--) out.push(pool[i], ...(i === j ? [] : [pool[j]]));
+        return out.reverse();
+      }
+      default:
+        return pool;
     }
   }
 
@@ -355,7 +555,7 @@ export class AudioEngine {
   preview(track: Track, row: number) {
     const channel = this.channels.get(track.id);
     if (!this.ctx || !channel) return;
-    this.playNote(track, row, this.ctx.currentTime, 0.2, channel);
+    this.playNote(track, this.rowFrequency(row), this.ctx.currentTime, 0.2, channel, 1);
   }
 
   private pulseWave(width: number): PeriodicWave {
@@ -377,19 +577,36 @@ export class AudioEngine {
     else osc.type = p.waveform;
   }
 
-  private playNote(track: Track, row: number, time: number, hold: number, channel: Channel) {
+  private playNote(track: Track, freq: number, time: number, hold: number, channel: Channel, level: number) {
     const ctx = this.ctx!;
     const p = track.params;
-    const freq = getRowPitch(this.song.scale, this.song.gridSize, row).frequency;
-    const peak = 0.35 / Math.sqrt(p.unison);
+    const peak = (0.35 / Math.sqrt(p.unison)) * level;
     const sustainLevel = Math.max(p.sustain, 0.0001) * peak;
     const noteOff = time + Math.max(hold, p.attack + 0.02);
     const end = noteOff + p.release;
 
+    // Filters: lowpass (optionally swept by an envelope) -> highpass
     const filter = ctx.createBiquadFilter();
     filter.type = 'lowpass';
-    filter.frequency.value = Math.min(p.cutoff, ctx.sampleRate / 2 - 100);
-    filter.Q.value = p.resonance;
+    const cutoff = p.lpEnabled ? Math.min(p.cutoff, ctx.sampleRate / 2 - 100) : ctx.sampleRate / 2 - 100;
+    filter.Q.value = p.lpEnabled ? p.resonance : 0.7;
+    if (p.lpEnabled && p.filterEnvEnabled) {
+      const top = Math.min(cutoff * 2 ** (p.filterEnvAmount * 4), ctx.sampleRate / 2 - 100);
+      filter.frequency.setValueAtTime(top, time);
+      filter.frequency.exponentialRampToValueAtTime(cutoff, time + p.attack + Math.max(p.decay, 0.05) * 2);
+    } else {
+      filter.frequency.value = cutoff;
+    }
+    let tail: AudioNode = filter;
+    let highpass: BiquadFilterNode | null = null;
+    if (p.hpEnabled) {
+      highpass = ctx.createBiquadFilter();
+      highpass.type = 'highpass';
+      highpass.frequency.value = p.hpCutoff;
+      highpass.Q.value = p.hpResonance;
+      filter.connect(highpass);
+      tail = highpass;
+    }
 
     const env = ctx.createGain();
     env.gain.setValueAtTime(0, time);
@@ -397,14 +614,33 @@ export class AudioEngine {
     env.gain.linearRampToValueAtTime(sustainLevel, time + p.attack + p.decay);
     env.gain.setValueAtTime(sustainLevel, Math.max(noteOff, time + p.attack + p.decay));
     env.gain.linearRampToValueAtTime(0, end);
-    filter.connect(env).connect(channel.input);
+    tail.connect(env).connect(channel.input);
+
+    // Glide slides in from the previous pitch of this track
+    const previous = this.lastFreq.get(track.id);
+    this.lastFreq.set(track.id, freq);
+    const glideTime = p.glide * 0.25;
+    const glideFrom = previous && glideTime > 0 ? previous : null;
+    const pitch = (param: AudioParam, target: number) => {
+      if (glideFrom) {
+        param.setValueAtTime(glideFrom, time);
+        param.linearRampToValueAtTime(target, time + glideTime);
+      } else {
+        param.value = target;
+      }
+    };
 
     const sources: AudioScheduledSourceNode[] = [];
     const oscillator = (f: number, detune = 0) => {
       const osc = ctx.createOscillator();
       this.setWave(osc, p);
-      osc.frequency.value = f;
-      osc.detune.value = detune;
+      pitch(osc.frequency, f);
+      if (p.pitchEnvEnabled) {
+        osc.detune.setValueAtTime(detune + p.pitchEnvSemitones * 100, time);
+        osc.detune.linearRampToValueAtTime(detune, time + Math.max(p.pitchEnvTime, 0.005));
+      } else {
+        osc.detune.value = detune;
+      }
       osc.connect(filter);
       sources.push(osc);
       return osc;
@@ -416,7 +652,7 @@ export class AudioEngine {
       if (p.fmAmount > 0) {
         const mod = ctx.createOscillator();
         const depth = ctx.createGain();
-        mod.frequency.value = freq * 2;
+        mod.frequency.value = freq * p.fmRatio;
         depth.gain.value = p.fmAmount * freq * 1.5;
         depth.gain.setValueAtTime(p.fmAmount * freq * 1.5, time);
         depth.gain.exponentialRampToValueAtTime(Math.max(p.fmAmount * freq * 0.1, 0.01), time + p.attack + p.decay + 0.3);
@@ -427,7 +663,7 @@ export class AudioEngine {
     if (p.subLevel > 0) {
       const sub = ctx.createOscillator();
       sub.type = 'sine';
-      sub.frequency.value = freq / 2;
+      pitch(sub.frequency, freq / 2);
       const subGain = ctx.createGain();
       subGain.gain.value = p.subLevel;
       sub.connect(subGain).connect(filter);
@@ -450,6 +686,7 @@ export class AudioEngine {
     sources[0].onended = () => {
       sources.forEach((s) => s.disconnect());
       filter.disconnect();
+      highpass?.disconnect();
       env.disconnect();
     };
   }

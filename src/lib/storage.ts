@@ -2,6 +2,8 @@ import {
   DEFAULT_EFFECTS,
   DEFAULT_SOUND,
   GRID_SIZES,
+  PARAM_CHOICES,
+  PARAM_RANGES,
   createSong,
   emptyMatrix,
   newId,
@@ -58,6 +60,35 @@ function base64ToBytes(text: string): Uint8Array {
 const num = (value: unknown, fallback: number, min: number, max: number) =>
   typeof value === 'number' && Number.isFinite(value) ? Math.min(max, Math.max(min, value)) : fallback;
 
+/** Validate an untrusted settings object against a defaults object */
+function mergeSettings<T extends object>(defaults: T, raw: Record<string, any>): T {
+  const out: Record<string, unknown> = {};
+  for (const [key, def] of Object.entries(defaults)) {
+    const value = raw[key];
+    if (typeof def === 'number') {
+      const [min, max] = PARAM_RANGES[key] ?? [-Infinity, Infinity];
+      out[key] = num(value, def, min, max);
+      if (Number.isInteger(def) && ['unison', 'noteLength', 'ratchet', 'arpNotes', 'arpOctaves', 'chordInversion'].includes(key)) {
+        out[key] = Math.round(out[key] as number);
+      }
+    } else if (typeof def === 'boolean') {
+      out[key] = typeof value === 'boolean' ? value : def;
+    } else {
+      const choices = PARAM_CHOICES[key];
+      out[key] = choices?.includes(value) ? value : def;
+    }
+  }
+  return out as T;
+}
+
+/** Songs saved before effect toggles existed: keep non-zero effects switched on */
+function effectsWithLegacy(e: Record<string, any>): Record<string, any> {
+  const next = { ...e };
+  if (e.distortionEnabled === undefined && typeof e.distortion === 'number') next.distortionEnabled = e.distortion > 0;
+  if (e.chorusEnabled === undefined && typeof e.chorus === 'number') next.chorusEnabled = e.chorus > 0;
+  return next;
+}
+
 function pick<T extends string>(value: unknown, allowed: readonly T[], fallback: T): T {
   return allowed.includes(value as T) ? (value as T) : fallback;
 }
@@ -73,7 +104,6 @@ export function sanitizeSong(raw: unknown): Song {
   const tracks: Track[] = rawTracks.map((item, i) => {
     const t = (item ?? {}) as Record<string, any>;
     const p = (t.params ?? {}) as Record<string, any>;
-    const d = DEFAULT_SOUND;
     return {
       id: newId(),
       name: typeof t.name === 'string' ? t.name.slice(0, 40) : `Synth ${i + 1}`,
@@ -81,22 +111,7 @@ export function sanitizeSong(raw: unknown): Song {
         typeof t.matrix === 'string'
           ? unpackMatrix(t.matrix, gridSize)
           : emptyMatrix(gridSize),
-      params: {
-        waveform: pick(p.waveform, ['sine', 'sawtooth', 'triangle', 'square', 'pulse'] as const, d.waveform),
-        pulseWidth: num(p.pulseWidth, d.pulseWidth, 0.05, 0.95),
-        attack: num(p.attack, d.attack, 0, 2),
-        decay: num(p.decay, d.decay, 0, 2),
-        sustain: num(p.sustain, d.sustain, 0, 1),
-        release: num(p.release, d.release, 0, 4),
-        cutoff: num(p.cutoff, d.cutoff, 100, 20000),
-        resonance: num(p.resonance, d.resonance, 0, 20),
-        subLevel: num(p.subLevel, d.subLevel, 0, 1),
-        noiseLevel: num(p.noiseLevel, d.noiseLevel, 0, 1),
-        unison: Math.round(num(p.unison, d.unison, 1, 8)),
-        detune: num(p.detune, d.detune, 0, 100),
-        fmAmount: num(p.fmAmount, d.fmAmount, 0, 1),
-        gate: num(p.gate, d.gate, 0.1, 1)
-      },
+      params: mergeSettings(DEFAULT_SOUND, p),
       volume: num(t.volume, 0.8, 0, 1),
       pan: num(t.pan, 0, -1, 1),
       reverbSend: num(t.reverbSend, 0.3, 0, 1),
@@ -107,7 +122,6 @@ export function sanitizeSong(raw: unknown): Song {
   if (!tracks.length) return { ...base, gridSize, tracks: [{ ...base.tracks[0], matrix: emptyMatrix(gridSize) }] };
 
   const e = (r.effects ?? {}) as Record<string, any>;
-  const de = DEFAULT_EFFECTS;
   return {
     name: typeof r.name === 'string' ? r.name.slice(0, 60) : base.name,
     tempo: Math.round(num(r.tempo, base.tempo, 30, 240)),
@@ -115,18 +129,10 @@ export function sanitizeSong(raw: unknown): Song {
     beatsPerBar: Math.round(num(r.beatsPerBar, 4, 2, 7)),
     scale: typeof r.scale === 'string' && r.scale in SCALES ? r.scale : base.scale,
     pattern: pick(r.pattern, ['forward', 'backward', 'bounce', 'random'] as const, 'forward'),
-    effects: {
-      delayTime: num(e.delayTime, de.delayTime, 0.01, 1),
-      delayFeedback: num(e.delayFeedback, de.delayFeedback, 0, 0.9),
-      delayMix: num(e.delayMix, de.delayMix, 0, 1),
-      reverbMix: num(e.reverbMix, de.reverbMix, 0, 1),
-      impulse: pick(e.impulse, ['reverb', 'guitar', 'drum'] as const, de.impulse),
-      distortion: num(e.distortion, de.distortion, 0, 50),
-      chorus: num(e.chorus, de.chorus, 0, 1),
-      eqLow: num(e.eqLow, 0, -12, 12),
-      eqMid: num(e.eqMid, 0, -12, 12),
-      eqHigh: num(e.eqHigh, 0, -12, 12)
-    },
+    swing: num(r.swing, 0.5, 0.25, 0.75),
+    humanizeTiming: num(r.humanizeTiming, 0, 0, 1),
+    humanizeVelocity: num(r.humanizeVelocity, 0, 0, 1),
+    effects: mergeSettings(DEFAULT_EFFECTS, effectsWithLegacy(e)),
     tracks,
     activeTrack: Math.min(Math.max(0, Math.round(num(r.activeTrack, 0, 0, tracks.length - 1))), tracks.length - 1)
   };

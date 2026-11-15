@@ -1,48 +1,82 @@
 <script lang="ts">
   import Choice from './Choice.svelte';
+  import OptionGrid from './OptionGrid.svelte';
   import ParamSlider from './ParamSlider.svelte';
+  import Section from './Section.svelte';
   import { Label } from '$lib/components/ui/label';
+  import { Switch } from '$lib/components/ui/switch';
   import { song, commit } from '$lib/song.svelte';
-  import type { ImpulseType } from '$lib/types';
+  import type { DelayDivision, DelayMode, ImpulseType } from '$lib/types';
 
-  const fx = song.effects;
+  const fx = $derived(song.effects);
   const impulses = [
     { value: 'reverb', label: 'Plate reverb' },
     { value: 'guitar', label: 'Guitar cabinet' },
     { value: 'drum', label: 'Drum room' }
   ];
+  const modes = [
+    { value: 'pingpong', label: 'Ping Pong' },
+    { value: 'mono', label: 'Mono' },
+    { value: 'stereo', label: 'Stereo' },
+    { value: 'slapback', label: 'Slapback' }
+  ];
+  const divisions = [
+    { value: '1/4', label: '1/4' },
+    { value: '1/8', label: '1/8' },
+    { value: '1/16', label: '1/16' },
+    { value: '1/8d', label: 'Dotted 1/8' }
+  ];
   const pct = (v: number) => `${Math.round(v * 100)}%`;
   const db = (v: number) => `${v > 0 ? '+' : ''}${v.toFixed(1)} dB`;
 </script>
 
-<div class="space-y-5">
-  <section class="space-y-3">
-    <h3 class="text-sm font-medium">Delay</h3>
-    <ParamSlider label="Time" bind:value={fx.delayTime} min={0.02} max={1} format={(v) => `${Math.round(v * 1000)} ms`} oncommit={commit} />
-    <ParamSlider label="Feedback" bind:value={fx.delayFeedback} min={0} max={0.9} format={pct} oncommit={commit} />
-    <ParamSlider label="Mix" bind:value={fx.delayMix} min={0} max={1} format={pct} oncommit={commit} />
-  </section>
-
-  <section class="space-y-3">
-    <h3 class="text-sm font-medium">Reverb</h3>
-    <div class="space-y-1.5">
-      <Label class="text-muted-foreground text-xs">Space</Label>
-      <Choice label="Impulse response" class="w-full" value={fx.impulse} options={impulses} onchange={(v) => { fx.impulse = v as ImpulseType; commit(); }} />
+<div>
+  <Section title="Reverb" bind:enabled={fx.reverbEnabled} onchange={commit}>
+    <Choice label="Impulse response" class="w-full" value={fx.impulse} options={impulses} onchange={(v) => { fx.impulse = v as ImpulseType; commit(); }} />
+    <div class="grid grid-cols-2 gap-x-4">
+      <ParamSlider label="Mix" bind:value={fx.reverbMix} min={0} max={1} format={pct} oncommit={commit} />
+      <ParamSlider label="Decay" bind:value={fx.reverbDecay} min={0.1} max={1} format={pct} oncommit={commit} />
     </div>
-    <ParamSlider label="Mix" bind:value={fx.reverbMix} min={0} max={1} format={pct} oncommit={commit} />
-    <p class="text-muted-foreground text-xs">Each track's Reverb slider controls how much of it is sent here.</p>
-  </section>
+    <p class="text-muted-foreground text-xs">Each track's Reverb slider sets how much of it is sent here.</p>
+  </Section>
 
-  <section class="space-y-3">
-    <h3 class="text-sm font-medium">Colour</h3>
-    <ParamSlider label="Distortion" bind:value={fx.distortion} min={0} max={50} step={1} format={(v) => String(v)} oncommit={commit} />
-    <ParamSlider label="Chorus" bind:value={fx.chorus} min={0} max={1} format={pct} oncommit={commit} />
-  </section>
+  <Section title="Delay" bind:enabled={fx.delayEnabled} onchange={commit}>
+    <OptionGrid label="Delay mode" cols={2} options={modes} value={fx.delayMode} onchange={(v) => { fx.delayMode = v as DelayMode; commit(); }} />
+    <div class="flex items-center justify-between">
+      <Label for="delay-sync" class="text-muted-foreground text-xs">Sync to tempo</Label>
+      <Switch id="delay-sync" bind:checked={fx.delaySync} onCheckedChange={commit} />
+    </div>
+    {#if fx.delaySync}
+      <OptionGrid label="Delay note value" cols={4} options={divisions} value={fx.delayDivision} onchange={(v) => { fx.delayDivision = v as DelayDivision; commit(); }} />
+    {:else}
+      <ParamSlider label="Time" bind:value={fx.delayTime} min={0.02} max={1} format={(v) => `${Math.round(v * 1000)} ms`} oncommit={commit} />
+    {/if}
+    <div class="grid grid-cols-2 gap-x-4">
+      <ParamSlider label="Feedback" bind:value={fx.delayFeedback} min={0} max={0.9} format={pct} oncommit={commit} />
+      <ParamSlider label="Mix" bind:value={fx.delayMix} min={0} max={1} format={pct} oncommit={commit} />
+    </div>
+  </Section>
 
-  <section class="space-y-3">
-    <h3 class="text-sm font-medium">Equalizer</h3>
+  <Section title="Distortion" bind:enabled={fx.distortionEnabled} onchange={commit} open={false}>
+    <ParamSlider label="Drive" bind:value={fx.distortion} min={0} max={50} step={1} format={(v) => String(v)} oncommit={commit} />
+  </Section>
+
+  <Section title="Stereo spread" bind:enabled={fx.spreadEnabled} onchange={commit} open={false}>
+    <ParamSlider label="Width" bind:value={fx.spread} min={0} max={1} format={pct} oncommit={commit} />
+  </Section>
+
+  <Section title="Chorus" bind:enabled={fx.chorusEnabled} onchange={commit} open={false}>
+    <ParamSlider label="Depth" bind:value={fx.chorus} min={0} max={1} format={pct} oncommit={commit} />
+  </Section>
+
+  <Section title="Ring mod" bind:enabled={fx.ringEnabled} onchange={commit} open={false}>
+    <ParamSlider label="Frequency" bind:value={fx.ringFreq} min={20} max={2000} step={5} format={(v) => `${v} Hz`} oncommit={commit} />
+    <ParamSlider label="Mix" bind:value={fx.ringMix} min={0} max={1} format={pct} oncommit={commit} />
+  </Section>
+
+  <Section title="Equalizer" open={false}>
     <ParamSlider label="Low" bind:value={fx.eqLow} min={-12} max={12} step={0.5} format={db} oncommit={commit} />
     <ParamSlider label="Mid" bind:value={fx.eqMid} min={-12} max={12} step={0.5} format={db} oncommit={commit} />
     <ParamSlider label="High" bind:value={fx.eqHigh} min={-12} max={12} step={0.5} format={db} oncommit={commit} />
-  </section>
+  </Section>
 </div>

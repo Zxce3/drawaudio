@@ -64,3 +64,19 @@ test('MIDI export then import keeps notes', () => {
 test('rejects non-MIDI data', () => {
   expect(() => parseMidi(new Uint8Array([1, 2, 3]))).toThrow();
 });
+
+test('sanitize validates new voice and effect settings', () => {
+  const song = sanitizeSong({
+    swing: 9,
+    effects: { delayMode: 'bogus', reverbDecay: -3, distortion: 20 },
+    tracks: [{ params: { arpMode: 'nope', ratchet: 99, chordEnabled: 'yes', unison: 3.4 } }]
+  });
+  expect(song.swing).toBe(0.75);
+  expect(song.effects.delayMode).toBe('pingpong');
+  expect(song.effects.reverbDecay).toBe(0.1);
+  expect(song.effects.distortionEnabled).toBe(true); // legacy song with distortion keeps it on
+  expect(song.tracks[0].params.arpMode).toBe('off');
+  expect(song.tracks[0].params.ratchet).toBe(4);
+  expect(song.tracks[0].params.chordEnabled).toBe(false);
+  expect(song.tracks[0].params.unison).toBe(3);
+});
