@@ -294,6 +294,9 @@
         <div class="aspect-square w-full overflow-hidden border border-gray-300 bg-white rounded-lg shadow-md">
           <div 
             id="matrix" 
+            role="grid"
+            tabindex="-1"
+            aria-label="Sound grid"
             class="grid w-full h-full select-none"
             style="grid-template-columns: repeat({matrixSize}, 1fr); grid-auto-rows: 1fr;"
             onmousemove={handleDrag}
@@ -310,8 +313,10 @@
                   data-row={rowIndex}
                   data-col={colIndex}
                   onmousedown={(e) => handleDragStart(e, rowIndex, colIndex)}
+                  aria-label={`Row ${rowIndex + 1}, column ${colIndex + 1}`}
+                  aria-pressed={cell}
                   use:nonPassive={{ touchstart: (e) => handleDragStart(e, rowIndex, colIndex) }}
-                />
+                ></button>
               {/each}
             {/each}
           </div>
@@ -367,8 +372,9 @@
             </div>
 
             <div class="space-y-2">
-              <label class="text-sm text-gray-600">Scale:</label>
+              <label for="scaleSelect" class="text-sm text-gray-600">Scale:</label>
               <select 
+                id="scaleSelect"
                 class="w-full px-3 py-2 border border-gray-300 rounded"
                 bind:value={currentScale}
                 onchange={() => updateScale(currentScale)}
@@ -381,7 +387,7 @@
 
             <!-- Add Pattern Controls -->
             <div class="space-y-2">
-              <label class="text-sm text-gray-600">Pattern:</label>
+              <span class="text-sm text-gray-600">Pattern:</span>
               <div class="grid grid-cols-4 gap-2">
                 {#each patterns as { id, icon, label }}
                   <button
@@ -407,11 +413,12 @@
             {#each effectControls as param}
               <div class="space-y-2">
                 <div class="flex justify-between">
-                  <label class="text-sm text-gray-600">{param.label}:</label>
+                  <label for={`fx-${param.id}`} class="text-sm text-gray-600">{param.label}:</label>
                   <span class="text-sm text-gray-600">{param.value.toFixed(2)}</span>
                 </div>
                 <input 
                   type="range"
+                  id={`fx-${param.id}`}
                   class="w-full"
                   value={param.value}
                   min={param.min}
@@ -431,7 +438,7 @@
               </div>
             {/each}
             <div class="space-y-2">
-              <label class="text-sm text-gray-600">Impulse Response:</label>
+              <span class="text-sm text-gray-600">Impulse Response:</span>
               <div class="grid grid-cols-3 gap-2">
                 {#each ['reverb', 'guitar', 'drum'] as type}
                   <button

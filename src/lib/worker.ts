@@ -53,5 +53,5 @@ self.onmessage = (e: MessageEvent) => {
 // Error handling
 self.onerror = (error) => {
   console.error('Worker error:', error);
-  postMessage({ type: 'error', payload: error.message });
+  postMessage({ type: 'error', payload: error instanceof ErrorEvent ? error.message : String(error) });
 };
