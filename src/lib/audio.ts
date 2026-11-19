@@ -4,6 +4,7 @@ import { GRAIN_WORKLET_NAME, GRAIN_WORKLET_SOURCE } from './grain-worklet';
 import { CRUSHER_NAME, CRUSHER_SOURCE, RECORDER_NAME, RECORDER_SOURCE } from './worklets';
 import { encodeWav } from './wav';
 import { wavetableHarmonics } from './wavetables';
+import { heldSteps } from './types';
 import type { ChordType, DelayDivision, Effects, ImpulseType, Song, SoundParams, Track } from './types';
 
 const DIVISION_BEATS: Record<DelayDivision, number> = { '1/4': 1, '1/8': 0.5, '1/16': 0.25, '1/8d': 0.75 };
@@ -719,7 +720,7 @@ export class AudioEngine {
         // Jump to the next column that has a note on any track
         for (let i = 1; i <= size; i++) {
           const col = (step + i) % size;
-          if (this.song.tracks.some((t) => t.matrix.some((row) => row[col]))) return col;
+          if (this.song.tracks.some((t) => t.matrix.some((row, r) => row[col] && !t.ties?.[r]?.[col]))) return col;
         }
         return (step + 1) % size;
       }
@@ -752,13 +753,21 @@ export class AudioEngine {
       if (track.mute || (anySolo && !track.solo)) continue;
       const channel = this.channels.get(track.id);
       if (!channel) continue;
+      // Only the first cell of a held note starts a voice; its tied cells just make it last longer
       const rows: number[] = [];
-      for (let row = song.gridSize - 1; row >= 0; row--) if (track.matrix[row]?.[col]) rows.push(row);
+      const held = new Map<number, number>();
+      for (let row = song.gridSize - 1; row >= 0; row--) {
+        if (!track.matrix[row]?.[col] || track.ties?.[row]?.[col]) continue;
+        rows.push(row);
+        held.set(row, heldSteps(track.ties ?? [], row, col));
+      }
       if (!rows.length) continue;
 
       const p = track.params;
       const freqs = this.expandChords(rows, p);
-      const steps = [1, 2, 4, 8, 16][p.noteLength - 1] ?? 1;
+      const longest = Math.max(...held.values());
+      // Notes drawn with an explicit length win over the track's Note length setting
+      const steps = longest > 1 ? longest : ([1, 2, 4, 8, 16][p.noteLength - 1] ?? 1);
       const start = time + swingOffset;
 
       if (p.arpMode !== 'off') {
@@ -773,11 +782,16 @@ export class AudioEngine {
         }
         this.arpIndex.set(track.id, index);
       } else {
-        for (const freq of freqs) {
-          const repeats = Math.max(1, p.ratchet);
+        // Without chords each row is one note, so each keeps its own length
+        const notes = p.chordEnabled
+          ? freqs.map((freq) => ({ freq, count: longest }))
+          : rows.map((row) => ({ freq: this.rowFrequency(row), count: held.get(row) ?? 1 }));
+        for (const { freq, count } of notes) {
+          const own = count > 1 ? count : steps;
+          const repeats = count > 1 ? 1 : Math.max(1, p.ratchet);
           const sub = stepDuration / repeats;
           for (let i = 0; i < repeats; i++) {
-            const hold = (repeats > 1 ? sub : stepDuration * steps) * p.gate;
+            const hold = (repeats > 1 ? sub : stepDuration * own) * p.gate;
             this.voice(track, channel, freq, start + i * sub, hold, stepDuration);
           }
         }

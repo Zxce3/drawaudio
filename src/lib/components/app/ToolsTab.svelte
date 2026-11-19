@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Pencil, Eraser, ArrowUp, ArrowDown, Dices } from '@lucide/svelte';
+  import { Pencil, Eraser, ArrowUp, ArrowDown, Dices, MoveHorizontal } from '@lucide/svelte';
   import * as ToggleGroup from '$lib/components/ui/toggle-group';
   import { Button } from '$lib/components/ui/button';
   import ParamSlider from './ParamSlider.svelte';
@@ -15,11 +15,12 @@
 
 <div>
   <Section title="Tool">
-    <ToggleGroup.Root type="single" value={ui.tool} onValueChange={(v) => v && (ui.tool = v as 'draw' | 'erase')} variant="outline" class="w-full">
+    <ToggleGroup.Root type="single" value={ui.tool} onValueChange={(v) => v && (ui.tool = v as 'draw' | 'erase' | 'hold')} variant="outline" class="w-full">
       <ToggleGroup.Item value="draw" class="flex-1 gap-2"><Pencil class="size-4" /> Draw</ToggleGroup.Item>
+      <ToggleGroup.Item value="hold" class="flex-1 gap-2"><MoveHorizontal class="size-4" /> Long</ToggleGroup.Item>
       <ToggleGroup.Item value="erase" class="flex-1 gap-2"><Eraser class="size-4" /> Erase</ToggleGroup.Item>
     </ToggleGroup.Root>
-    <p class="text-muted-foreground text-xs">Drag across the grid to paint. Right-click erases. Click a lit cell to remove it.</p>
+    <p class="text-muted-foreground text-xs">Draw: drag to paint single notes. Long: drag sideways to make one note that lasts several steps (Shift+drag does the same while drawing). Shift+Right / Shift+Left in the grid lengthen or shorten a note. Right-click erases.</p>
     <Button variant="outline" class="w-full gap-2" onclick={clearTrack}><Eraser class="size-4" /> Clear active track</Button>
   </Section>
 

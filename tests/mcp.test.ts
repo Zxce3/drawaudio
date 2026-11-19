@@ -57,3 +57,20 @@ test('examples, MIDI export and import', () => {
   expect(back.tracks.length).toBe(song.tracks.length);
   expect(() => getExample('nope')).toThrow();
 });
+
+test('held notes: ~ and - hold a note, and describe_song round-trips them', () => {
+  const song = createSongFromSpec({ ...spec, tracks: [{ name: 'Pad', steps: 'C4 C4~ C4~ . E4 - - . G4 G4 .' }] });
+  const t = song.tracks[0];
+  const heads = (r: number) => t.matrix[r].map((on, c) => (on && !t.ties[r][c] ? heldStepsOf(t, r, c) : 0)).filter(Boolean);
+  const lengths = t.matrix.flatMap((_, r) => heads(r)).sort();
+  expect(lengths).toEqual([1, 1, 3, 3]);
+  const text = songToSteps(song)[0].steps.join(' ');
+  expect(text).toContain('~');
+  const again = createSongFromSpec({ ...spec, tracks: songToSteps(song).map((s) => ({ name: s.name, steps: s.steps })) });
+  expect(again.tracks[0].ties).toEqual(t.ties);
+});
+function heldStepsOf(t: { ties: boolean[][] }, r: number, c: number) {
+  let n = 1;
+  while (t.ties[r][c + n]) n++;
+  return n;
+}

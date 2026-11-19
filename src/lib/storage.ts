@@ -3,6 +3,7 @@ import {
   DEFAULT_SOUND,
   GRID_SIZES,
   PARAM_CHOICES,
+  cleanTies,
   PARAM_RANGES,
   createSong,
   emptyMatrix,
@@ -104,13 +105,12 @@ export function sanitizeSong(raw: unknown): Song {
   const tracks: Track[] = rawTracks.map((item, i) => {
     const t = (item ?? {}) as Record<string, any>;
     const p = (t.params ?? {}) as Record<string, any>;
+    const matrix = typeof t.matrix === 'string' ? unpackMatrix(t.matrix, gridSize) : emptyMatrix(gridSize);
     return {
       id: newId(),
       name: typeof t.name === 'string' ? t.name.slice(0, 40) : `Synth ${i + 1}`,
-      matrix:
-        typeof t.matrix === 'string'
-          ? unpackMatrix(t.matrix, gridSize)
-          : emptyMatrix(gridSize),
+      matrix,
+      ties: cleanTies(matrix, typeof t.ties === 'string' ? unpackMatrix(t.ties, gridSize) : emptyMatrix(gridSize)),
       params: mergeSettings(DEFAULT_SOUND, p),
       volume: num(t.volume, 0.8, 0, 1),
       pan: num(t.pan, 0, -1, 1),
@@ -139,7 +139,14 @@ export function sanitizeSong(raw: unknown): Song {
 }
 
 export function toCompact(song: Song): unknown {
-  return { ...song, tracks: song.tracks.map((t) => ({ ...t, matrix: packMatrix(t.matrix) })) };
+  // `ties` is only stored when a track has held notes, which keeps old songs and share links unchanged
+  return {
+    ...song,
+    tracks: song.tracks.map((t) => {
+      const { ties, ...rest } = t;
+      return { ...rest, matrix: packMatrix(t.matrix), ...(ties?.some((row) => row.some(Boolean)) ? { ties: packMatrix(ties) } : {}) };
+    })
+  };
 }
 
 // -------------------------------------------------------------- local songs

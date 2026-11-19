@@ -39,6 +39,6 @@ claude mcp add drawaudio -- bun /absolute/path/to/drawaudio/mcp/server.ts
 
 Songs are passed between tools either as the compact `song` JSON or as a `share_link`.
 
-Step syntax: one string per bar of 16 steps; tokens are `.` (rest), note names like `Eb4`, `C#3` (snapped to the scale), a number (pitch index from the lowest row) or `C4,E4,G4` (several notes at once).
+Step syntax: one string per bar of 16 steps; tokens are `.` (rest), note names like `Eb4`, `C#3` (snapped to the scale), a number (pitch index from the lowest row) or `C4,E4,G4` (several notes at once). Append `~` to hold a note from the previous step (`C4 C4~ C4~ C4~` = one 4-step note); `-` holds every note of the previous step.
 
 See the wiki page "MCP Server" for details and examples.

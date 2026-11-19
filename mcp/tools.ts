@@ -39,7 +39,9 @@ export function songToSteps(song: Song) {
       for (let col = start; col < Math.min(start + BAR, song.gridSize); col++) {
         const notes: string[] = [];
         for (let row = song.gridSize - 1; row >= 0; row--) {
-          if (track.matrix[row]?.[col]) notes.push(formatNote(getRowPitch(song.scale, song.gridSize, row)));
+          if (!track.matrix[row]?.[col]) continue;
+          // "~" marks a cell tied to the previous step: the same held note, not a new one
+          notes.push(formatNote(getRowPitch(song.scale, song.gridSize, row)) + (track.ties[row]?.[col] ? '~' : ''));
         }
         tokens.push(notes.length ? notes.join(',') : '.');
       }

@@ -1,7 +1,8 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import Visualizer from './Visualizer.svelte';
-  import { song, ui, activeTrack, setCell, commit, previewCell, ensureAudio } from '$lib/song.svelte';
+  import { song, ui, activeTrack, setCell, setHeldNote, adjustNoteLength, commit, previewCell, ensureAudio } from '$lib/song.svelte';
+  import { heldSteps } from '$lib/types';
   import { getRowPitch, formatNote } from '$lib/scales';
 
   const GUTTER = 52;
@@ -18,6 +19,9 @@
   let dragValue = true;
   let dragChanged = false;
   let last: { row: number; col: number } | null = null;
+  // Long-note drag: the run being drawn, applied when the pointer is released
+  let holdDrag: { row: number; from: number } | null = null;
+  let holdPreview = $state<{ row: number; from: number; to: number } | null>(null);
 
   const size = $derived(song.gridSize);
   const cellW = $derived((width - GUTTER) / size);
@@ -64,6 +68,17 @@
     // Browsers only allow audio after a gesture: start the engine on first touch
     ensureAudio();
     const erase = ui.tool === 'erase' || event.button === 2;
+    // Long-note tool (or Shift while drawing): drag sideways to set how long one note lasts
+    if (!erase && (ui.tool === 'hold' || event.shiftKey)) {
+      holdDrag = { row: cell.row, from: cell.col };
+      holdPreview = { row: cell.row, from: cell.col, to: cell.col };
+      dragging = true;
+      dragChanged = false;
+      last = cell;
+      cursor = cell;
+      previewCell(cell.row);
+      return;
+    }
     dragValue = erase ? false : !activeTrack().matrix[cell.row][cell.col];
     dragging = true;
     dragChanged = false;
@@ -76,6 +91,10 @@
     const cell = cellAt(event);
     hover = cell;
     if (!dragging || !cell || !last) return;
+    if (holdDrag) {
+      holdPreview = { row: holdDrag.row, from: holdDrag.from, to: cell.col };
+      return;
+    }
     if (cell.row !== last.row || cell.col !== last.col) {
       paintLine(last, cell);
       last = cell;
@@ -86,6 +105,20 @@
     if (!dragging) return;
     dragging = false;
     last = null;
+    if (holdDrag && holdPreview) {
+      const { row, from, to } = holdPreview;
+      const track = activeTrack();
+      if (from === to) {
+        // A plain click still toggles the cell, like the draw tool
+        dragValue = !track.matrix[row][from];
+        paint(row, from);
+      } else {
+        setHeldNote(row, from, to);
+        dragChanged = true;
+      }
+      holdDrag = null;
+      holdPreview = null;
+    }
     if (dragChanged) commit();
   }
 
@@ -93,7 +126,11 @@
     const move: Record<string, [number, number]> = {
       ArrowUp: [-1, 0], ArrowDown: [1, 0], ArrowLeft: [0, -1], ArrowRight: [0, 1]
     };
-    if (event.key in move) {
+    if (event.shiftKey && (event.key === 'ArrowRight' || event.key === 'ArrowLeft')) {
+      // Shift+Right / Shift+Left lengthen or shorten the note under the cursor
+      if (adjustNoteLength(cursor.row, cursor.col, event.key === 'ArrowRight' ? 1 : -1)) commit();
+      event.preventDefault();
+    } else if (event.key in move) {
       const [dr, dc] = move[event.key];
       cursor = {
         row: Math.min(size - 1, Math.max(0, cursor.row + dr)),
@@ -191,15 +228,17 @@
     }
 
     // Notes: other tracks as faint ghosts, the active track outlined
-    const drawNotes = (matrix: boolean[][], ghost: boolean) => {
+    const drawNotes = (matrix: boolean[][], ties: boolean[][], ghost: boolean) => {
       for (let row = 0; row < size; row++) {
         for (let col = 0; col < size; col++) {
-          if (!matrix[row]?.[col]) continue;
+          // Tied cells are drawn as part of the note they continue
+          if (!matrix[row]?.[col] || ties?.[row]?.[col]) continue;
+          const length = heldSteps(ties ?? [], row, col);
           const x = GUTTER + col * cellW + 1;
           const y = row * cellH + 1;
-          const w = cellW - 2;
+          const w = cellW * length - 2;
           const h = cellH - 2;
-          const hit = ui.playing && ui.step === col;
+          const hit = ui.playing && ui.step >= col && ui.step < col + length;
           ctx.strokeStyle = ghost ? muted : hit ? playhead : cell;
           ctx.fillStyle = hit && !ghost ? playhead : cell;
           ctx.globalAlpha = ghost ? 0.35 : 1;
@@ -217,9 +256,22 @@
     };
     const activeIndex = Math.min(song.activeTrack, song.tracks.length - 1);
     song.tracks.forEach((track, i) => {
-      if (i !== activeIndex) drawNotes(track.matrix, true);
+      if (i !== activeIndex) drawNotes(track.matrix, track.ties, true);
     });
-    drawNotes(song.tracks[activeIndex].matrix, false);
+    drawNotes(song.tracks[activeIndex].matrix, song.tracks[activeIndex].ties, false);
+
+    // The long note being dragged out
+    if (holdPreview) {
+      const a = Math.min(holdPreview.from, holdPreview.to);
+      const b = Math.max(holdPreview.from, holdPreview.to);
+      ctx.fillStyle = cell;
+      ctx.strokeStyle = cell;
+      ctx.globalAlpha = 0.35;
+      ctx.fillRect(GUTTER + a * cellW + 1, holdPreview.row * cellH + 1, (b - a + 1) * cellW - 2, cellH - 2);
+      ctx.globalAlpha = 1;
+      ctx.lineWidth = 1.5;
+      ctx.strokeRect(GUTTER + a * cellW + 1.5, holdPreview.row * cellH + 1.5, (b - a + 1) * cellW - 3, cellH - 3);
+    }
 
     // Hover and keyboard cursor
     if (hover && !dragging) {
@@ -246,10 +298,10 @@
   <canvas
     bind:this={canvas}
     style="width: {width}px; height: {height}px;"
-    class="relative block touch-none outline-none select-none {ui.tool === 'erase' ? 'cursor-cell' : 'cursor-crosshair'}"
+    class="relative block touch-none outline-none select-none {ui.tool === 'erase' ? 'cursor-cell' : ui.tool === 'hold' ? 'cursor-ew-resize' : 'cursor-crosshair'}"
     role="application"
     tabindex="0"
-    aria-label="Note grid for {activeTrack().name}. Arrow keys move, Enter toggles a note, Delete erases."
+    aria-label="Note grid for {activeTrack().name}. Arrow keys move, Enter toggles a note, Shift plus Right or Left lengthens or shortens it, Delete erases."
     {onpointerdown}
     {onpointermove}
     onpointerup={endDrag}

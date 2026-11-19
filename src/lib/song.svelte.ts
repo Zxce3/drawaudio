@@ -7,6 +7,8 @@ import {
   createSong,
   createTrack,
   emptyMatrix,
+  cleanTies,
+  heldSteps,
   type Track
 } from './types';
 import type { Song } from './types';
@@ -20,7 +22,7 @@ export const ui = $state({
   step: -1,
   stepsPlayed: 0,
   elapsed: 0,
-  tool: 'draw' as 'draw' | 'erase',
+  tool: 'draw' as 'draw' | 'erase' | 'hold',
   canUndo: false,
   canRedo: false,
   audioError: '',
@@ -107,12 +109,47 @@ export function setCell(row: number, col: number, value: boolean) {
   if (track.matrix[row]?.[col] === undefined) return false;
   if (track.matrix[row][col] === value) return false;
   track.matrix[row][col] = value;
+  // A fresh or erased cell is never part of a held note, and the note after it starts anew
+  track.ties[row][col] = false;
+  if (col + 1 < track.ties[row].length) track.ties[row][col + 1] = false;
+  return true;
+}
+
+/** Make one note that lasts from `from` to `to` (inclusive) in a row, replacing whatever was there */
+export function setHeldNote(row: number, from: number, to: number) {
+  const track = activeTrack();
+  const size = song.gridSize;
+  const a = Math.max(0, Math.min(from, to));
+  const b = Math.min(size - 1, Math.max(from, to));
+  if (!track.matrix[row] || a > b) return false;
+  for (let c = a; c <= b; c++) {
+    track.matrix[row][c] = true;
+    track.ties[row][c] = c > a;
+  }
+  // The cell after the run starts a note of its own, and a note cut in half keeps its head
+  if (b + 1 < size) track.ties[row][b + 1] = false;
+  return true;
+}
+
+/** Lengthen or shorten the note under a cell by whole steps. Returns false if nothing changed. */
+export function adjustNoteLength(row: number, col: number, delta: 1 | -1) {
+  const track = activeTrack();
+  if (!track.matrix[row]?.[col]) return false;
+  let head = col;
+  while (head > 0 && track.ties[row][head]) head--;
+  const length = heldSteps(track.ties, row, head);
+  const next = Math.min(length + delta, song.gridSize - head);
+  if (next < 1 || next === length) return false;
+  if (next > length) return setHeldNote(row, head, head + next - 1);
+  track.matrix[row][head + length - 1] = false;
+  track.ties[row][head + length - 1] = false;
   return true;
 }
 
 export function clearTrack() {
   const track = activeTrack();
   track.matrix = emptyMatrix(song.gridSize);
+  track.ties = emptyMatrix(song.gridSize);
   commit();
 }
 
@@ -121,13 +158,18 @@ export function setGridSize(size: number) {
   const old = song.gridSize;
   for (const track of song.tracks) {
     const next = emptyMatrix(size);
+    const nextTies = emptyMatrix(size);
     // Keep pitch alignment: rows are anchored to the bottom (lowest note)
     for (let r = 0; r < old; r++) {
       const nr = r - old + size;
       if (nr < 0 || nr >= size) continue;
-      for (let c = 0; c < Math.min(old, size); c++) next[nr][c] = track.matrix[r][c];
+      for (let c = 0; c < Math.min(old, size); c++) {
+        next[nr][c] = track.matrix[r][c];
+        nextTies[nr][c] = track.ties[r][c];
+      }
     }
     track.matrix = next;
+    track.ties = cleanTies(next, nextTies);
   }
   song.gridSize = size;
   commit();
@@ -166,12 +208,15 @@ export function transpose(direction: 1 | -1) {
   const track = activeTrack();
   const size = song.gridSize;
   const next = emptyMatrix(size);
+  const nextTies = emptyMatrix(size);
   for (let r = 0; r < size; r++) {
     const nr = r - direction; // up = lower row index
     if (nr < 0 || nr >= size) continue;
     next[nr] = [...track.matrix[r]];
+    nextTies[nr] = [...track.ties[r]];
   }
   track.matrix = next;
+  track.ties = nextTies;
   commit();
 }
 
@@ -186,6 +231,7 @@ export function generatePattern(density: number) {
     matrix[row][col] = true;
   }
   activeTrack().matrix = matrix;
+  activeTrack().ties = emptyMatrix(size);
   commit();
 }
 

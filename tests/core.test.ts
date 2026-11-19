@@ -2,7 +2,7 @@ import { expect, test } from 'bun:test';
 import { exportMidi, midiToSong, parseMidi } from '../src/lib/midi';
 import { findRowForMidi, getRowPitch } from '../src/lib/scales';
 import { packMatrix, sanitizeSong, toCompact, unpackMatrix } from '../src/lib/storage';
-import { createSong, createTrack } from '../src/lib/types';
+import { createSong, createTrack, heldSteps } from '../src/lib/types';
 
 test('row pitch: top row is highest, range stays audible', () => {
   for (const size of [8, 16, 32, 64]) {
@@ -44,7 +44,8 @@ test('MIDI export then import keeps notes', () => {
   const song = createSong();
   song.gridSize = 16;
   song.tracks = [createTrack(16, 'Lead'), createTrack(16, 'Bass')];
-  song.tracks[0].matrix[3][0] = song.tracks[0].matrix[3][1] = true; // one long note
+  song.tracks[0].matrix[3][0] = song.tracks[0].matrix[3][1] = true;
+  song.tracks[0].ties[3][1] = true; // one long note (tied cells)
   song.tracks[0].matrix[7][8] = true;
   song.tracks[1].matrix[12][4] = true;
   song.tempo = 100;
@@ -193,4 +194,36 @@ test('sanitize validates bitcrusher settings', () => {
   expect(s.effects.crusherBits).toBe(16);
   expect(s.effects.crusherRate).toBe(0.02);
   expect(s.effects.crusherEnabled).toBe(true);
+});
+
+test('held notes: ties survive save, share and sanitize, and invalid ties are dropped', () => {
+  const song = createSong();
+  const track = song.tracks[0];
+  track.matrix[3][2] = track.matrix[3][3] = track.matrix[3][4] = true;
+  track.ties[3][3] = track.ties[3][4] = true;
+  const copy = sanitizeSong(toCompact(song));
+  expect(copy.tracks[0].ties[3]).toEqual(track.ties[3]);
+  expect(heldSteps(copy.tracks[0].ties, 3, 2)).toBe(3);
+  // a tie without a note before it is removed
+  const bad = toCompact(song) as any;
+  const stray = createSong().tracks[0].ties;
+  stray[5][5] = true;
+  bad.tracks[0].ties = packMatrix(stray);
+  expect(sanitizeSong(bad).tracks[0].ties[5][5]).toBe(false);
+  // songs without held notes keep the old compact form
+  expect('ties' in (toCompact(createSong()) as any).tracks[0]).toBe(false);
+});
+
+test('MIDI: a held note exports as one long note and imports back with its length', () => {
+  const song = createSong();
+  const track = song.tracks[0];
+  for (const c of [0, 1, 2, 3]) track.matrix[8][c] = true;
+  track.ties[8][1] = track.ties[8][2] = track.ties[8][3] = true; // one 4-step note
+  track.matrix[9][4] = track.matrix[9][5] = true; // two separate 1-step notes
+  track.matrix[1][12] = true; // keeps the imported grid at 16 steps
+  const back = midiToSong(parseMidi(exportMidi(song)), { ...createSong(), scale: song.scale }, 'x');
+  const t = back.tracks[0];
+  const heads = (r: number) => t.matrix[r].map((on, c) => (on && !t.ties[r][c] ? heldSteps(t.ties, r, c) : 0)).filter(Boolean);
+  expect(heads(8)).toEqual([4]);
+  expect(heads(9)).toEqual([1, 1]);
 });

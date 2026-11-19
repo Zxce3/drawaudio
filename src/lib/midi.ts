@@ -1,5 +1,5 @@
 import { findRowForMidi, getRowPitch } from './scales';
-import { GRID_SIZES, createTrack, emptyMatrix, type Song } from './types';
+import { GRID_SIZES, createTrack, emptyMatrix, heldSteps, type Song } from './types';
 
 const PPQ = 480;
 const STEP_TICKS = PPQ / 4; // one grid column = a sixteenth note
@@ -45,8 +45,9 @@ export function exportMidi(song: Song): Uint8Array {
           col++;
           continue;
         }
+        // A note is one cell plus the cells tied to it, exactly as the audio engine plays it
         const start = col;
-        while (col < song.gridSize && track.matrix[row][col]) col++;
+        col += heldSteps(track.ties ?? [], row, col);
         events.push({ tick: start * STEP_TICKS, order: 1, data: [0x90 | channel, midi, 96] });
         events.push({ tick: col * STEP_TICKS, order: 0, data: [0x80 | channel, midi, 0] });
       }
@@ -192,12 +193,16 @@ export function midiToSong(parsed: ParsedMidi, base: Song, fileName = 'Imported'
     tracks: tracks.map((source, i) => {
       const track = createTrack(gridSize, source.name || `Synth ${i + 1}`);
       track.matrix = emptyMatrix(gridSize);
+      track.ties = emptyMatrix(gridSize);
       for (const note of source.notes) {
         const col = Math.round(note.tick / stepTicks);
         if (col >= gridSize) continue;
         const row = findRowForMidi(base.scale, gridSize, note.midi);
         const length = Math.max(1, Math.round(note.duration / stepTicks));
-        for (let c = col; c < Math.min(gridSize, col + length); c++) track.matrix[row][c] = true;
+        for (let c = col; c < Math.min(gridSize, col + length); c++) {
+          track.matrix[row][c] = true;
+          if (c > col) track.ties[row][c] = true;
+        }
       }
       return track;
     })

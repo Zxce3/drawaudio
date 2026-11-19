@@ -27,7 +27,7 @@ const songInput = {
 const trackSchema = z.object({
   name: z.string().max(40),
   steps: z.union([z.string(), z.array(z.string())]).describe(
-    'One string per bar of 16 steps (a single string is one bar; short bars are padded with rests). Space-separated tokens: "." rest, a note name like "Eb4" or "C#3" (snapped to the song scale), a number = pitch index up from the lowest row, "C4,E4,G4" = several notes at once.'
+    'One string per bar of 16 steps (a single string is one bar; short bars are padded with rests). Space-separated tokens: "." rest, a note name like "Eb4" or "C#3" (snapped to the song scale), a number = pitch index up from the lowest row, "C4,E4,G4" = several notes at once. Append ~ to hold a note from the previous step ("C4 C4~ C4~ C4~" is one note lasting 4 steps); "-" holds every note of the previous step ("C4 - - -"). Without ~ or -, neighbouring steps are separate notes.'
   ),
   sound: z.string().optional().describe('Preset name from list_presets'),
   sound_overrides: z.record(z.string(), z.any()).optional().describe('Sound parameters from get_param_schema.trackSound'),

@@ -19,7 +19,8 @@ export interface TrackSpec {
    * One string per bar of 16 steps (a single string is one bar; short bars are padded with rests).
    * Tokens: "." rest; a number is a pitch index counted up from the lowest row;
    * a note name such as "Eb4" is snapped to the nearest pitch of the song's scale;
-   * "a,b" plays several notes at once.
+   * "a,b" plays several notes at once; a "~" after a pitch ("C4~") holds that note from the previous step;
+   * "-" holds every note of the previous step.
    */
   steps: string | string[];
   sound?: Sound;
@@ -82,13 +83,31 @@ export function build(spec: SongSpec): Song {
     track.volume = t.volume ?? 0.8;
     track.pan = t.pan ?? 0;
     track.reverbSend = t.reverb ?? 0.3;
+    let previous: number[] = [];
     parseSteps(t.steps).forEach((token, col) => {
-      if (token === '.' || col >= size) return;
-      for (const pitch of token.split(',')) {
-        const midi = noteToMidi(pitch);
-        const row = midi === null ? size - 1 - Number(pitch) : findRowForMidi(spec.scale, size, midi);
-        if (row >= 0 && row < size) track.matrix[row][col] = true;
+      if (col >= size) return;
+      const rows: number[] = [];
+      const hold = (row: number) => {
+        track.matrix[row][col] = true;
+        if (col > 0 && track.matrix[row][col - 1]) track.ties[row][col] = true;
+        rows.push(row);
+      };
+      if (token === '-') previous.forEach(hold);
+      else if (token !== '.') {
+        for (const raw of token.split(',')) {
+          const tied = raw.endsWith('~');
+          const pitch = tied ? raw.slice(0, -1) : raw;
+          const midi = noteToMidi(pitch);
+          const row = midi === null ? size - 1 - Number(pitch) : findRowForMidi(spec.scale, size, midi);
+          if (row < 0 || row >= size) continue;
+          if (tied) hold(row);
+          else {
+            track.matrix[row][col] = true;
+            rows.push(row);
+          }
+        }
       }
+      previous = rows;
     });
     return track;
   });

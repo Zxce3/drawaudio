@@ -30,7 +30,7 @@ export const SHORTCUTS: Shortcut[] = [
 
   { group: 'Editing', keys: 'Ctrl+Z', description: 'Undo', match: (e) => mod(e) && key(e) === 'z' && !e.shiftKey, run: () => undo(), global: true },
   { group: 'Editing', keys: 'Ctrl+Shift+Z / Ctrl+Y', description: 'Redo', match: (e) => mod(e) && ((key(e) === 'z' && e.shiftKey) || key(e) === 'y'), run: () => redo(), global: true },
-  { group: 'Editing', keys: 'D / E', description: 'Draw tool / erase tool', match: (e) => plain(e) && (key(e) === 'd' || key(e) === 'e'), run: (e) => { ui.tool = key(e) === 'd' ? 'draw' : 'erase'; notify(`${ui.tool === 'draw' ? 'Draw' : 'Erase'} tool`); } },
+  { group: 'Editing', keys: 'D / L / E', description: 'Draw tool / long-note tool / erase tool', match: (e) => plain(e) && ['d', 'l', 'e'].includes(key(e)), run: (e) => { ui.tool = ({ d: 'draw', l: 'hold', e: 'erase' } as const)[key(e) as 'd' | 'l' | 'e']; notify(`${{ draw: 'Draw', hold: 'Long note', erase: 'Erase' }[ui.tool]} tool`); } },
   { group: 'Editing', keys: 'Shift+↑ / Shift+↓', description: 'Transpose the active track', match: (e) => e.shiftKey && plain(e) && (e.key === 'ArrowUp' || e.key === 'ArrowDown'), run: (e) => transpose(e.key === 'ArrowUp' ? 1 : -1) },
   { group: 'Editing', keys: 'G', description: 'Generate a random melody', match: (e) => key(e) === 'g' && plain(e), run: () => { generatePattern(0.4); notify('Generated a melody (Ctrl+Z to undo)'); } },
   { group: 'Editing', keys: 'C', description: 'Clear the active track', match: (e) => key(e) === 'c' && plain(e), run: () => { clearTrack(); notify(`Cleared ${activeTrack().name} (Ctrl+Z to undo)`); } },
@@ -51,6 +51,7 @@ export const SHORTCUTS: Shortcut[] = [
 export const GRID_SHORTCUTS: [string, string][] = [
   ['Arrow keys', 'Move the cursor in the grid'],
   ['Enter or X', 'Toggle a note at the cursor'],
+  ['Shift+← / Shift+→', 'Shorten / lengthen the note at the cursor'],
   ['Delete', 'Erase the note at the cursor']
 ];
 

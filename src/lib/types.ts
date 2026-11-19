@@ -89,6 +89,8 @@ export interface Track {
   id: string;
   name: string;
   matrix: boolean[][]; // [row][col], row 0 = highest pitch
+  /** ties[row][col]: this cell continues the note of the previous column (a held note). Only valid where both cells are on */
+  ties: boolean[][];
   params: SoundParams;
   volume: number; // 0 - 1
   pan: number; // -1 - 1
@@ -240,6 +242,18 @@ export function emptyMatrix(size: number): boolean[][] {
   return Array.from({ length: size }, () => Array<boolean>(size).fill(false));
 }
 
+/** Steps a note lasts: 1 plus the tied cells that follow its first cell */
+export function heldSteps(ties: boolean[][], row: number, col: number): number {
+  let n = 1;
+  while (ties[row]?.[col + n]) n++;
+  return n;
+}
+
+/** Drop ties that do not sit between two lit cells, so a tie can never exist without its note */
+export function cleanTies(matrix: boolean[][], ties: boolean[][]): boolean[][] {
+  return matrix.map((cells, r) => cells.map((on, c) => on && c > 0 && !!matrix[r][c - 1] && !!ties[r]?.[c]));
+}
+
 let idCounter = 0;
 export function newId(): string {
   idCounter += 1;
@@ -251,6 +265,7 @@ export function createTrack(size: number, name: string, params: Partial<SoundPar
     id: newId(),
     name,
     matrix: emptyMatrix(size),
+    ties: emptyMatrix(size),
     params: { ...DEFAULT_SOUND, ...params },
     volume: 0.8,
     pan: 0,

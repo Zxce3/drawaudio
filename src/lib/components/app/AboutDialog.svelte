@@ -6,7 +6,7 @@
   let { open = $bindable(false) }: { open: boolean } = $props();
 
   const steps = [
-    ['Draw', 'Click or drag on the grid to place notes. Right-click (or the Erase tool) removes them. Rows are pitches, columns are time.'],
+    ['Draw', 'Click or drag on the grid to place notes. Hold Shift (or use the Long tool) and drag sideways to make one long note. Right-click (or the Erase tool) removes them. Rows are pitches, columns are time.'],
     ['Play', 'Press Play or Space. The yellow column is the playhead. Change tempo, scale, grid size and direction from the top bar.'],
     ['Layer', 'Add up to 8 tracks at the bottom. Each has its own sound, volume, pan and reverb send, plus mute and solo.'],
     ['Shape the sound', 'Seq: waveform, groove, arpeggio, chords. Sound: envelopes, filters, wavetable, FM. FX: reverb, delay, tape, vinyl and more.'],
