@@ -6,7 +6,7 @@
   import TrackStrip from '$lib/components/app/TrackStrip.svelte';
   import Toast from '$lib/components/app/Toast.svelte';
   import GuideTour from '$lib/components/app/GuideTour.svelte';
-  import { song, ui, getEngine, disposeEngine, replaceSong } from '$lib/song.svelte';
+  import { song, ui, getEngine, disposeEngine, replaceSong, notify } from '$lib/song.svelte';
   import { handleShortcut } from '$lib/shortcuts';
   import { decodeShare, sanitizeSong, toCompact } from '$lib/storage';
   import { EXAMPLE_SONGS } from '$lib/songs';
@@ -48,6 +48,8 @@
         }
       } catch (error) {
         console.warn('Could not restore song:', error);
+        // A share link that was copied incompletely or altered cannot be decoded: say so instead of showing an empty grid
+        if (/^#s=/.test(location.hash)) notify('This share link is damaged or cut off, so the song could not be opened. Ask for the link again.', 9000);
       }
       ready = true;
     })();

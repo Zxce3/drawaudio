@@ -184,9 +184,10 @@ export function deleteSong(id: string) {
 
 async function transform(bytes: Uint8Array, stream: CompressionStream | DecompressionStream) {
   const writer = stream.writable.getWriter();
-  writer.write(bytes as Uint8Array<ArrayBuffer>);
-  writer.close();
-  return new Uint8Array(await new Response(stream.readable).arrayBuffer());
+  const written = writer.write(bytes as Uint8Array<ArrayBuffer>).then(() => writer.close());
+  // Both sides can fail on damaged input (for example a truncated link): wait for both and surface one error
+  const [, out] = await Promise.all([written, new Response(stream.readable).arrayBuffer()]);
+  return new Uint8Array(out);
 }
 
 export async function encodeShare(song: Song): Promise<string> {

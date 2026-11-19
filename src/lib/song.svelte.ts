@@ -317,10 +317,10 @@ export function disposeEngine() {
 let toastTimer: ReturnType<typeof setTimeout> | undefined;
 
 /** Show a short message (also announced to screen readers) */
-export function notify(message: string) {
+export function notify(message: string, ms = 2600) {
   ui.toast = message;
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => (ui.toast = ''), 2600);
+  toastTimer = setTimeout(() => (ui.toast = ''), ms);
 }
 
 // ----------------------------------------------------------- files and saving

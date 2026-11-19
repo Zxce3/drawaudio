@@ -2,7 +2,7 @@
   import { onMount } from 'svelte';
   import { Button } from '$lib/components/ui/button';
   import { pwa, applyUpdate } from '$lib/pwa.svelte';
-  import { notify } from '$lib/song.svelte';
+  import { notify, ui } from '$lib/song.svelte';
 
   const KEY = 'drawaudio:offline-notified';
   let dismissedUpdate = $state(false);
@@ -16,7 +16,7 @@
     } catch {
       /* show it anyway */
     }
-    notify('Ready to work offline');
+    if (!ui.toast) notify('Ready to work offline');
   });
 
   let wasOnline = true;
