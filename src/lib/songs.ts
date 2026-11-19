@@ -13,7 +13,7 @@ const BAR = 16; // steps per bar: one bar is a 16-step pattern of sixteenth note
 
 type Sound = string | [string, Partial<SoundParams>];
 
-interface TrackSpec {
+export interface TrackSpec {
   name: string;
   /**
    * One string per bar of 16 steps (a single string is one bar; short bars are padded with rests).
@@ -28,7 +28,7 @@ interface TrackSpec {
   reverb?: number;
 }
 
-interface SongSpec {
+export interface SongSpec {
   name: string;
   description: string;
   /** Grid size; the song has size / 16 bars */
@@ -66,7 +66,7 @@ export function parseSteps(steps: string | string[]): string[] {
   });
 }
 
-function build(spec: SongSpec): Song {
+export function build(spec: SongSpec): Song {
   const size = spec.size ?? 16;
   const song = createSong();
   song.name = spec.name;

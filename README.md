@@ -235,6 +235,10 @@ Ideas that would be great additions: more example songs, more presets, additiona
 - [web-audio-samples](https://github.com/GoogleChromeLabs/web-audio-samples) (Apache-2.0): the bitcrusher and WAV recorder follow its AudioWorklet patterns.
 - [shadcn-svelte](https://shadcn-svelte.com) and [Lucide](https://lucide.dev) for the interface components and icons.
 
+## MCP server for AI agents
+
+`mcp/` contains a local [MCP](https://modelcontextprotocol.io) server so agents (Claude Code, Claude Desktop, Cursor) can compose songs, edit sounds and effects, import and export MIDI and hand you a share link that plays the result. Add it with `claude mcp add drawaudio -- bun /path/to/drawaudio/mcp/server.ts`; see [mcp/README.md](mcp/README.md).
+
 ## License
 
 [MIT](LICENSE) © Memet Zx
