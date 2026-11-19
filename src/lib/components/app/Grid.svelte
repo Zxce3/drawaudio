@@ -22,6 +22,9 @@
   // Long-note drag: the run being drawn, applied when the pointer is released
   let holdDrag: { row: number; from: number } | null = null;
   let holdPreview = $state<{ row: number; from: number; to: number } | null>(null);
+  // Dragging the right edge of an existing note resizes it in place, with any tool except erase
+  let resizing: { end: number; moved: boolean } | null = null;
+  let hoverEdge = $state(false);
 
   const size = $derived(song.gridSize);
   const cellW = $derived((width - GUTTER) / size);
@@ -46,6 +49,22 @@
     return row < size && col < size ? { row, col } : null;
   }
 
+  /** The note whose right edge is under the pointer (the last 35% of its final cell), if any */
+  function edgeAt(event: PointerEvent): { row: number; head: number; end: number } | null {
+    const cell = cellAt(event);
+    if (!cell) return null;
+    const matrix = activeTrack().matrix;
+    const ties = activeTrack().ties;
+    if (!matrix[cell.row][cell.col]) return null;
+    let head = cell.col;
+    while (head > 0 && ties[cell.row][head]) head--;
+    const end = head + heldSteps(ties, cell.row, head) - 1;
+    if (cell.col !== end) return null;
+    const rect = canvas.getBoundingClientRect();
+    const within = (event.clientX - rect.left - GUTTER) / cellW - cell.col;
+    return within >= 0.65 ? { row: cell.row, head, end } : null;
+  }
+
   function paint(row: number, col: number) {
     if (setCell(row, col, dragValue)) {
       dragChanged = true;
@@ -68,6 +87,17 @@
     // Browsers only allow audio after a gesture: start the engine on first touch
     ensureAudio();
     const erase = ui.tool === 'erase' || event.button === 2;
+    const edge = erase ? null : edgeAt(event);
+    if (edge) {
+      resizing = { end: edge.end, moved: false };
+      holdDrag = { row: edge.row, from: edge.head };
+      holdPreview = { row: edge.row, from: edge.head, to: edge.end };
+      dragging = true;
+      dragChanged = false;
+      last = cell;
+      cursor = cell;
+      return;
+    }
     // Long-note tool (or Shift while drawing): drag sideways to set how long one note lasts
     if (!erase && (ui.tool === 'hold' || event.shiftKey)) {
       holdDrag = { row: cell.row, from: cell.col };
@@ -90,9 +120,12 @@
   function onpointermove(event: PointerEvent) {
     const cell = cellAt(event);
     hover = cell;
+    hoverEdge = !dragging && ui.tool !== 'erase' && !!edgeAt(event);
     if (!dragging || !cell || !last) return;
     if (holdDrag) {
-      holdPreview = { row: holdDrag.row, from: holdDrag.from, to: cell.col };
+      const to = resizing ? Math.max(cell.col, holdDrag.from) : cell.col;
+      if (resizing && to !== resizing.end) resizing.moved = true;
+      holdPreview = { row: holdDrag.row, from: holdDrag.from, to };
       return;
     }
     if (cell.row !== last.row || cell.col !== last.col) {
@@ -108,7 +141,19 @@
     if (holdDrag && holdPreview) {
       const { row, from, to } = holdPreview;
       const track = activeTrack();
-      if (from === to) {
+      if (resizing && !resizing.moved) {
+        // Pressed on a note's edge without dragging: behave like a click on that cell
+        dragValue = !track.matrix[row][resizing.end];
+        paint(row, resizing.end);
+      } else if (resizing) {
+        // Shrinking: the cells the note no longer covers are removed
+        for (let c = to + 1; c <= resizing.end; c++) {
+          track.matrix[row][c] = false;
+          track.ties[row][c] = false;
+        }
+        setHeldNote(row, from, to);
+        dragChanged = true;
+      } else if (from === to) {
         // A plain click still toggles the cell, like the draw tool
         dragValue = !track.matrix[row][from];
         paint(row, from);
@@ -118,6 +163,7 @@
       }
       holdDrag = null;
       holdPreview = null;
+      resizing = null;
     }
     if (dragChanged) commit();
   }
@@ -251,6 +297,12 @@
             ctx.restore();
           }
           ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
+          if (!ghost) {
+            // Grab handle on the right edge: drag it to change the note's duration
+            ctx.fillStyle = hit ? playhead : cell;
+            ctx.globalAlpha = 0.9;
+            ctx.fillRect(x + w - 3, y + 2, 3, Math.max(2, h - 4));
+          }
         }
       }
       ctx.globalAlpha = 1;
@@ -299,7 +351,7 @@
   <canvas
     bind:this={canvas}
     style="width: {width}px; height: {height}px;"
-    class="relative block touch-none outline-none select-none {ui.tool === 'erase' ? 'cursor-cell' : ui.tool === 'hold' ? 'cursor-ew-resize' : 'cursor-crosshair'}"
+    class="relative block touch-none outline-none select-none {ui.tool === 'erase' ? 'cursor-cell' : hoverEdge || ui.tool === 'hold' ? 'cursor-ew-resize' : 'cursor-crosshair'}"
     role="application"
     tabindex="0"
     aria-label="Note grid for {activeTrack().name}. Arrow keys move, Enter toggles a note, Shift plus Right or Left lengthens or shortens it, Delete erases."
@@ -307,7 +359,7 @@
     {onpointermove}
     onpointerup={endDrag}
     onpointercancel={endDrag}
-    onpointerleave={() => (hover = null)}
+    onpointerleave={() => ((hover = null), (hoverEdge = false))}
     oncontextmenu={(e) => e.preventDefault()}
     {onkeydown}
     onfocus={() => (focused = true)}

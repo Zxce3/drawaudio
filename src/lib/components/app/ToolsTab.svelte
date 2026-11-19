@@ -22,7 +22,7 @@
       <ToggleGroup.Item value="hold" class="flex-1 gap-2"><MoveHorizontal class="size-4" /> Long</ToggleGroup.Item>
       <ToggleGroup.Item value="erase" class="flex-1 gap-2"><Eraser class="size-4" /> Erase</ToggleGroup.Item>
     </ToggleGroup.Root>
-    <p class="text-muted-foreground text-xs">Draw: drag to paint single notes. Long: drag sideways to make one note that lasts several steps (Shift+drag does the same while drawing). Shift+Right / Shift+Left in the grid lengthen or shorten a note. Right-click erases.</p>
+    <p class="text-muted-foreground text-xs">Draw: drag to paint single notes. Long: drag sideways to make one note that lasts several steps (Shift+drag does the same while drawing). Drag the handle on the right edge of any note to change its duration, or press Shift+Right / Shift+Left in the grid. Right-click erases.</p>
     <Button variant="outline" class="w-full gap-2" onclick={clearTrack}><Eraser class="size-4" /> Clear active track</Button>
   </Section>
 
