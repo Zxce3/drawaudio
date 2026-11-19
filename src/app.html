@@ -13,8 +13,13 @@
 		<meta name="apple-mobile-web-app-capable" content="yes" />
 		<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 		<meta name="apple-mobile-web-app-title" content="DrawAudio" />
+		<script>
+			// Apply the saved skin before the first paint so there is no flash of the default colours
+			try { var s = localStorage.getItem('drawaudio:skin'); if (s) document.documentElement.dataset.skin = s; } catch (e) {}
+		</script>
 		<style>
 			html, body { background: #09090b; }
+			html[data-skin='daylight'] #splash, html[data-skin='daylight'], html[data-skin='daylight'] body { background: #fafafa; color: #18181b; }
 			/* Loading screen: plain HTML/CSS so it paints before any JavaScript runs */
 			#splash {
 				position: fixed; inset: 0; z-index: 100; display: flex; flex-direction: column;

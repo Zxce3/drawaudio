@@ -102,6 +102,7 @@ export const HELP: Record<string, string> = {
   'Equalizer/High': 'Boost or cut the treble.',
 
   // ------------------------------------------------------------- Tools
+  'Skin': 'Pick a colour theme for the whole app: Midnight, Amber, Phosphor, Rose or the light Daylight skin. Press K to cycle. It is remembered in this browser.',
   'Tool': 'Draw paints single notes. Long lets you drag sideways to make one note that lasts several steps. Erase removes notes. Right-click always erases.',
   'Visualizer': 'Draws the music as moving shapes behind the grid while it plays. Pick a style, or turn it off to save battery.',
   'Visualizer/Opacity': 'How visible the visualizer is. Keep it low so it never distracts from the notes.',

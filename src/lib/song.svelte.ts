@@ -14,6 +14,7 @@ import {
 import type { Song } from './types';
 import { saveSong } from './storage';
 import { exportMidi } from './midi';
+import { SKINS, SKIN_KEY, isSkin } from './skins';
 
 export const song: Song = $state(createSong());
 
@@ -37,7 +38,8 @@ export const ui = $state({
   toast: '',
   songId: undefined as string | undefined,
   vizStyle: 'bars' as VizStyle,
-  vizOpacity: 0.14
+  vizOpacity: 0.14,
+  skin: 'midnight'
 });
 
 export type VizStyle = 'off' | 'bars' | 'circle' | 'wave' | 'glow';
@@ -438,4 +440,23 @@ export function nudgeTempo(delta: number) {
 export function cycleVisualizer() {
   ui.vizStyle = VIZ_STYLES[(VIZ_STYLES.indexOf(ui.vizStyle) + 1) % VIZ_STYLES.length];
   notify(`Visualizer: ${ui.vizStyle}`);
+}
+
+// ------------------------------------------------------------------- skins
+
+/** Apply a colour skin. The attribute is set first so canvases that read CSS variables redraw with the new colours. */
+export function setSkin(id: string, announce = true) {
+  if (!isSkin(id)) return;
+  document.documentElement.dataset.skin = id;
+  ui.skin = id;
+  try {
+    localStorage.setItem(SKIN_KEY, id);
+  } catch {
+    /* storage unavailable: the skin lasts for this visit */
+  }
+  if (announce) notify(`Skin: ${SKINS.find((s) => s.id === id)?.label}`);
+}
+
+export function cycleSkin() {
+  setSkin(SKINS[(SKINS.findIndex((s) => s.id === ui.skin) + 1) % SKINS.length].id);
 }

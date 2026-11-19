@@ -6,7 +6,7 @@
   import TrackStrip from '$lib/components/app/TrackStrip.svelte';
   import Toast from '$lib/components/app/Toast.svelte';
   import GuideTour from '$lib/components/app/GuideTour.svelte';
-  import { song, ui, getEngine, disposeEngine, replaceSong, notify } from '$lib/song.svelte';
+  import { song, ui, getEngine, disposeEngine, replaceSong, notify, setSkin } from '$lib/song.svelte';
   import { handleShortcut } from '$lib/shortcuts';
   import { decodeShare, sanitizeSong, toCompact } from '$lib/storage';
   import { EXAMPLE_SONGS } from '$lib/songs';
@@ -31,6 +31,12 @@
       }
     } catch {
       /* ignore unreadable preferences */
+    }
+    try {
+      const skin = localStorage.getItem('drawaudio:skin');
+      if (skin) setSkin(skin, false);
+    } catch {
+      /* ignore */
     }
     (async () => {
       try {

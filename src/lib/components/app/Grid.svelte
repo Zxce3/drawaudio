@@ -157,6 +157,7 @@
 
   function draw() {
     if (!canvas) return;
+    void ui.skin; // redraw when the colours change
     const dpr = window.devicePixelRatio || 1;
     canvas.width = Math.floor(width * dpr);
     canvas.height = Math.floor(height * dpr);

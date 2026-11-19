@@ -1,5 +1,5 @@
 import {
-  activeTrack, addTrack, clearTrack, cycleVisualizer, exportMidiFile, generatePattern, nudgeTempo, redo,
+  activeTrack, addTrack, clearTrack, cycleSkin, cycleVisualizer, exportMidiFile, generatePattern, nudgeTempo, redo,
   saveCurrent, selectTrack, song, stepScale, stop, tapTempo, toggleMute, toggleRecording, toggleSolo, togglePlay,
   transpose, ui, undo, notify
 } from './song.svelte';
@@ -43,6 +43,7 @@ export const SHORTCUTS: Shortcut[] = [
   { group: 'Song', keys: 'Ctrl+E', description: 'Export as a MIDI file', match: (e) => mod(e) && key(e) === 'e', run: () => exportMidiFile(), global: true },
 
   { group: 'View', keys: 'V', description: 'Cycle the visualizer style', match: (e) => key(e) === 'v' && plain(e), run: () => cycleVisualizer() },
+  { group: 'View', keys: 'K', description: 'Next skin (colour theme)', match: (e) => key(e) === 'k' && plain(e), run: () => cycleSkin() },
   { group: 'View', keys: 'H', description: 'Start the guided tour', match: (e) => key(e) === 'h' && plain(e), run: () => (ui.tourOpen = true) },
   { group: 'View', keys: '? / F1', description: 'Show About and shortcuts', match: (e) => e.key === '?' || e.key === 'F1', run: () => (ui.aboutOpen = !ui.aboutOpen) }
 ];

@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { Track } from '$lib/types';
+  import { ui } from '$lib/song.svelte';
 
   let { track, size }: { track: Track; size: number } = $props();
   let canvas: HTMLCanvasElement;
@@ -7,6 +8,7 @@
   $effect(() => {
     const ctx = canvas?.getContext('2d');
     if (!ctx) return;
+    void ui.skin;
     const px = 48;
     const dpr = window.devicePixelRatio || 1;
     canvas.width = px * dpr;

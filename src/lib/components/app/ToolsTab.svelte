@@ -5,11 +5,13 @@
   import ParamSlider from './ParamSlider.svelte';
   import Section from './Section.svelte';
   import OptionGrid from './OptionGrid.svelte';
-  import { ui, transpose, generatePattern, clearTrack, VIZ_STYLES, type VizStyle } from '$lib/song.svelte';
+  import { ui, transpose, generatePattern, clearTrack, setSkin, VIZ_STYLES, type VizStyle } from '$lib/song.svelte';
+  import { SKINS } from '$lib/skins';
 
   import { SHORTCUTS, GRID_SHORTCUTS } from '$lib/shortcuts';
   const groups = ['Playback', 'Editing', 'Tracks', 'Song', 'View'] as const;
   let density = $state(0.4);
+  const skinOptions = SKINS.map((s) => ({ value: s.id, label: s.label }));
   const vizOptions = VIZ_STYLES.map((v) => ({ value: v, label: v[0].toUpperCase() + v.slice(1) }));
 </script>
 
@@ -22,6 +24,11 @@
     </ToggleGroup.Root>
     <p class="text-muted-foreground text-xs">Draw: drag to paint single notes. Long: drag sideways to make one note that lasts several steps (Shift+drag does the same while drawing). Shift+Right / Shift+Left in the grid lengthen or shorten a note. Right-click erases.</p>
     <Button variant="outline" class="w-full gap-2" onclick={clearTrack}><Eraser class="size-4" /> Clear active track</Button>
+  </Section>
+
+  <Section title="Skin">
+    <OptionGrid label="Skin" cols={3} options={skinOptions} value={ui.skin} onchange={(v) => setSkin(v)} />
+    <p class="text-muted-foreground text-xs">Change the colours of the whole app. Press K to cycle through the skins. Your choice is remembered.</p>
   </Section>
 
   <Section title="Visualizer">

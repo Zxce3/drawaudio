@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Play, Square, Eraser, Undo2, Redo2, ChevronLeft, ChevronRight, Music, Info, Circle, BookOpen, Download, WifiOff, LoaderCircle } from '@lucide/svelte';
+  import { Play, Square, Eraser, Undo2, Redo2, ChevronLeft, ChevronRight, Music, Info, Circle, BookOpen, Download, WifiOff, LoaderCircle, Palette } from '@lucide/svelte';
   import { Button } from '$lib/components/ui/button';
   import { Slider } from '$lib/components/ui/slider';
   import { Separator } from '$lib/components/ui/separator';
@@ -9,7 +9,7 @@
   import HelpTip from './HelpTip.svelte';
   import { pwa, install } from '$lib/pwa.svelte';
   import {
-    song, ui, clearTrack, commit, undo, redo, togglePlay, toggleRecording, setGridSize, stepScale, tapTempo, scaleNames, getEngine
+    song, ui, clearTrack, commit, undo, redo, togglePlay, toggleRecording, setGridSize, stepScale, tapTempo, scaleNames, getEngine, cycleSkin
   } from '$lib/song.svelte';
   import { scaleLabel } from '$lib/scales';
   import { GRID_SIZES, TIME_SIGNATURES } from '$lib/types';
@@ -23,6 +23,9 @@
     const n = ui.playing ? Math.max(0, ui.stepsPlayed - 1) : 0;
     return `${Math.floor(n / perBar) + 1}.${Math.floor((n % perBar) / 4) + 1}.${(n % 4) + 1}`;
   });
+  const fmt = (t: number) => `${Math.floor(t / 60)}:${(t % 60).toFixed(1).padStart(4, '0')}`;
+  // Length of one pass through the grid: a step is a sixteenth note
+  const loopLength = $derived(fmt((60 / song.tempo / 4) * song.gridSize));
   const time = $derived(`${Math.floor(ui.elapsed / 60)}:${(ui.elapsed % 60).toFixed(1).padStart(4, '0')}`);
 
   let level = $state(0);
@@ -46,7 +49,7 @@
   });
 </script>
 
-<header class="flex flex-wrap items-center gap-x-4 gap-y-2 border-b px-3 py-2">
+<header class="flex flex-wrap items-center gap-x-3 gap-y-2 border-b px-3 py-2">
   <div class="flex items-center gap-2 pr-1">
     <Music class="text-primary size-5" />
     <h1 class="text-lg font-semibold tracking-tight">Draw<span class="text-primary">Audio</span><span class="sr-only"> – free online music maker and step sequencer</span></h1>
@@ -54,7 +57,7 @@
 
   <dl class="bg-card hidden gap-4 rounded-md border px-3 py-1 font-mono text-xs md:flex" aria-label="Playback position" data-guide="position">
     <div><dt class="text-muted-foreground text-[10px] uppercase">Position</dt><dd class="tabular-nums">{position}</dd></div>
-    <div><dt class="text-muted-foreground text-[10px] uppercase">Time</dt><dd class="tabular-nums">{time}</dd></div>
+    <div><dt class="text-muted-foreground text-[10px] uppercase">Time</dt><dd class="tabular-nums">{time}<span class="text-muted-foreground" title="Length of one loop"> / {loopLength}</span></dd></div>
     <div><dt class="text-muted-foreground text-[10px] uppercase">Level</dt>
       <dd class="bg-muted mt-1.5 h-1.5 w-14 overflow-hidden rounded-full"><div class="bg-primary h-full" style="width: {Math.min(100, level * 140)}%"></div></dd>
     </div>
@@ -108,6 +111,7 @@
     <Button variant="outline" size="sm" class="gap-1.5" onclick={() => (ui.tourOpen = true)} data-guide="guide" aria-keyshortcuts="H">
       <BookOpen class="size-4" /> Guide
     </Button>
+    <IconButton icon={Palette} label="Next skin (K)" onclick={cycleSkin} />
     <IconButton guide="about" icon={Info} label="About and shortcuts (?)" onclick={() => (ui.aboutOpen = true)} />
   </div>
 </header>
