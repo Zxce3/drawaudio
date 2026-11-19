@@ -5,7 +5,7 @@
 export const HELP: Record<string, string> = {
   // ----------------------------------------------------------- top bar
   'bar/position': 'Where the playhead is, as bar.beat.step, and how long it has been playing. The meter shows the output level.',
-  'bar/gridSize': 'How many columns (time steps) and rows (pitches) the grid has. A bigger grid fits longer songs: 16×16 is one bar, 32×32 two bars, 64×64 four bars. Changing it keeps your notes where they fit. The menu beside it sets beats per bar, which only changes the heavier bar lines in the grid.',
+  'bar/gridSize': 'Pitch rows set how many notes the grid spans up and down (8, 16, 32 or 64). Song length sets how long the song is, from half a bar up to 64 bars; the grid shows it one page at a time, with page buttons under the grid. Shortening a song cuts the end off (Ctrl+Z brings it back). The menu beside them sets beats per bar, which only changes the heavier bar lines in the grid.',
   'bar/tempo': 'Speed in beats per minute. Drag the slider, tap the Tap button in rhythm, or press - and = on the keyboard.',
   'bar/scale': 'The notes the rows are allowed to play. Every row is a note of this scale, so melodies stay in key. Use the arrows to flip through scales.',
   'bar/record': 'Records everything you hear to a WAV file. Press again (or R) to stop and download it.',

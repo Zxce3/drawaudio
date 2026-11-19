@@ -22,7 +22,7 @@ A multi-track sequencer and synthesizer that runs entirely in your browser and w
 ## Features
 
 **Draw**
-- Piano-roll grid from **8×8 to 64×64**, drawn on a canvas. Click or drag to paint, right-click to erase.
+- Piano-roll grid with **8 to 64 pitch rows** and a **song length from half a bar to 64 bars**, shown one page at a time and drawn on a canvas. Click or drag to paint, right-click to erase, drag a note's right edge (or use the Long tool) to set its duration.
 - Rows are notes of the scale you pick (**18 scales**: major, minor, blues, Japanese, Dorian, Phrygian and more), so everything you draw stays in key. Note names are labelled on the left.
 - Beat and bar lines, a moving playhead, ghost notes from other tracks, and full keyboard control.
 - Undo and redo (100 steps), a random melody generator, and transpose.

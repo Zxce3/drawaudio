@@ -2,7 +2,7 @@
   import type { Track } from '$lib/types';
   import { ui } from '$lib/song.svelte';
 
-  let { track, size }: { track: Track; size: number } = $props();
+  let { track, rows, steps }: { track: Track; rows: number; steps: number } = $props();
   let canvas: HTMLCanvasElement;
 
   $effect(() => {
@@ -18,9 +18,10 @@
     ctx.fillStyle = styles.getPropertyValue('--background').trim();
     ctx.fillRect(0, 0, px, px);
     ctx.fillStyle = styles.getPropertyValue('--grid-cell').trim();
-    const cell = px / size;
-    for (let r = 0; r < size; r++) {
-      for (let c = 0; c < size; c++) if (track.matrix[r]?.[c]) ctx.fillRect(c * cell, r * cell, Math.max(cell, 1.5), Math.max(cell, 1.5));
+    const cw = px / steps;
+    const ch = px / rows;
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < steps; c++) if (track.matrix[r]?.[c]) ctx.fillRect(c * cw, r * ch, Math.max(cw, 1.5), Math.max(ch, 1.5));
     }
   });
 </script>

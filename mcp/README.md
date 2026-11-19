@@ -31,7 +31,7 @@ claude mcp add drawaudio -- bun /absolute/path/to/drawaudio/mcp/server.ts
 | --- | --- |
 | `list_examples`, `get_example` | The 21 built-in songs |
 | `list_scales`, `list_presets`, `get_param_schema` | Valid scales, presets, and every sound and effect parameter with ranges |
-| `create_song` | Compose from note-name step strings; returns link, summary and compact JSON |
+| `create_song` | Compose from note-name step strings (`bars` 1 to 64, `rows` 8 to 64); returns link, summary and compact JSON |
 | `edit_song` | Change tempo, scale, effects, mixer or a track's sound |
 | `describe_song` | Summary plus every track as note-name steps (feed it back to `create_song`) |
 | `make_share_link` | `https://drawaudio.zxce3.net/#s=...` link that opens the song in the app |

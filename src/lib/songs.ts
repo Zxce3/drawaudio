@@ -34,6 +34,10 @@ export interface SongSpec {
   description: string;
   /** Grid size; the song has size / 16 bars */
   size?: 16 | 32 | 64;
+  /** Pitch rows, when different from `size` (used for songs longer than 4 bars) */
+  rows?: number;
+  /** Length in steps, when different from `size` */
+  steps?: number;
   tempo: number;
   scale: string;
   swing?: number;
@@ -73,24 +77,28 @@ export function build(spec: SongSpec): Song {
   song.name = spec.name;
   song.tempo = spec.tempo;
   song.scale = spec.scale;
-  song.gridSize = size;
+  // The grid has 16 rows (a comfortable pitch range) and as many steps as the song has bars of 16
+  const rows = spec.rows ?? size;
+  const steps = spec.steps ?? size;
+  song.gridSize = rows;
+  song.steps = steps;
   song.swing = spec.swing ?? 0.5;
   song.humanizeTiming = spec.humanizeTiming ?? 0;
   song.humanizeVelocity = spec.humanizeVelocity ?? 0;
   song.effects = { ...DEFAULT_EFFECTS, ...spec.effects };
   song.tracks = spec.tracks.map((t) => {
-    const track = createTrack(size, t.name, soundParams(t.sound));
+    const track = createTrack(rows, t.name, soundParams(t.sound), steps);
     track.volume = t.volume ?? 0.8;
     track.pan = t.pan ?? 0;
     track.reverbSend = t.reverb ?? 0.3;
     let previous: number[] = [];
     parseSteps(t.steps).forEach((token, col) => {
-      if (col >= size) return;
-      const rows: number[] = [];
+      if (col >= steps) return;
+      const placed: number[] = [];
       const hold = (row: number) => {
         track.matrix[row][col] = true;
         if (col > 0 && track.matrix[row][col - 1]) track.ties[row][col] = true;
-        rows.push(row);
+        placed.push(row);
       };
       if (token === '-') previous.forEach(hold);
       else if (token !== '.') {
@@ -98,16 +106,16 @@ export function build(spec: SongSpec): Song {
           const tied = raw.endsWith('~');
           const pitch = tied ? raw.slice(0, -1) : raw;
           const midi = noteToMidi(pitch);
-          const row = midi === null ? size - 1 - Number(pitch) : findRowForMidi(spec.scale, size, midi);
-          if (row < 0 || row >= size) continue;
+          const row = midi === null ? rows - 1 - Number(pitch) : findRowForMidi(spec.scale, rows, midi);
+          if (row < 0 || row >= rows) continue;
           if (tied) hold(row);
           else {
             track.matrix[row][col] = true;
-            rows.push(row);
+            placed.push(row);
           }
         }
       }
-      previous = rows;
+      previous = placed;
     });
     return track;
   });

@@ -48,7 +48,9 @@ server.registerTool('create_song', {
     name: z.string().max(60),
     tempo: z.number().min(30).max(240).optional().describe('bpm, default 90'),
     scale: z.string().optional().describe('From list_scales, default Pentatonic'),
-    size: z.union([z.literal(16), z.literal(32), z.literal(64)]).optional().describe('Steps: 16 = 1 bar, 32 = 2 bars, 64 = 4 bars. Default 16'),
+    bars: z.union([z.literal(1), z.literal(2), z.literal(4), z.literal(8), z.literal(16), z.literal(32), z.literal(64)]).optional().describe('Song length in bars of 16 steps. Give one string of steps per bar in each track. Default 1'),
+    rows: z.union([z.literal(8), z.literal(16), z.literal(32), z.literal(64)]).optional().describe('Pitch rows (the grid height). Default 32; use 64 with the Chromatic scale for a wide range'),
+    size: z.union([z.literal(16), z.literal(32), z.literal(64)]).optional().describe('Legacy: bars and rows together (16 = 1 bar x 16 rows). Prefer bars and rows'),
     swing: z.number().min(0.25).max(0.75).optional(),
     effects: z.record(z.string(), z.any()).optional().describe('Effect parameters from get_param_schema.effects'),
     tracks: z.array(trackSchema).min(1).max(8)

@@ -20,7 +20,7 @@ export const examplePath = (id: string) => `/examples/${id}/`;
 
 export function exampleInfo(example: ExampleSong): ExampleInfo {
   const song = example.create();
-  const bars = song.gridSize / 16;
+  const bars = song.steps / 16;
   const scale = scaleLabel(song.scale);
   const trackNames = song.tracks.map((t) => t.name);
   const barText = `${bars}-bar`;

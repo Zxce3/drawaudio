@@ -9,6 +9,7 @@ import {
   emptyMatrix,
   cleanTies,
   heldSteps,
+  STEP_OPTIONS,
   type Track
 } from './types';
 import type { Song } from './types';
@@ -39,7 +40,10 @@ export const ui = $state({
   songId: undefined as string | undefined,
   vizStyle: 'bars' as VizStyle,
   vizOpacity: 0.14,
-  skin: 'midnight'
+  skin: 'midnight',
+  /** Current page of the grid and how many steps a page shows */
+  page: 0,
+  pageSize: 32
 });
 
 export type VizStyle = 'off' | 'bars' | 'circle' | 'wave' | 'glow';
@@ -120,7 +124,7 @@ export function setCell(row: number, col: number, value: boolean) {
 /** Make one note that lasts from `from` to `to` (inclusive) in a row, replacing whatever was there */
 export function setHeldNote(row: number, from: number, to: number) {
   const track = activeTrack();
-  const size = song.gridSize;
+  const size = song.steps;
   const a = Math.max(0, Math.min(from, to));
   const b = Math.min(size - 1, Math.max(from, to));
   if (!track.matrix[row] || a > b) return false;
@@ -140,7 +144,7 @@ export function adjustNoteLength(row: number, col: number, delta: 1 | -1) {
   let head = col;
   while (head > 0 && track.ties[row][head]) head--;
   const length = heldSteps(track.ties, row, head);
-  const next = Math.min(length + delta, song.gridSize - head);
+  const next = Math.min(length + delta, song.steps - head);
   if (next < 1 || next === length) return false;
   if (next > length) return setHeldNote(row, head, head + next - 1);
   track.matrix[row][head + length - 1] = false;
@@ -150,8 +154,8 @@ export function adjustNoteLength(row: number, col: number, delta: 1 | -1) {
 
 export function clearTrack() {
   const track = activeTrack();
-  track.matrix = emptyMatrix(song.gridSize);
-  track.ties = emptyMatrix(song.gridSize);
+  track.matrix = emptyMatrix(song.gridSize, song.steps);
+  track.ties = emptyMatrix(song.gridSize, song.steps);
   commit();
 }
 
@@ -159,13 +163,13 @@ export function setGridSize(size: number) {
   if (!GRID_SIZES.includes(size as (typeof GRID_SIZES)[number]) || size === song.gridSize) return;
   const old = song.gridSize;
   for (const track of song.tracks) {
-    const next = emptyMatrix(size);
-    const nextTies = emptyMatrix(size);
+    const next = emptyMatrix(size, song.steps);
+    const nextTies = emptyMatrix(size, song.steps);
     // Keep pitch alignment: rows are anchored to the bottom (lowest note)
     for (let r = 0; r < old; r++) {
       const nr = r - old + size;
       if (nr < 0 || nr >= size) continue;
-      for (let c = 0; c < Math.min(old, size); c++) {
+      for (let c = 0; c < song.steps; c++) {
         next[nr][c] = track.matrix[r][c];
         nextTies[nr][c] = track.ties[r][c];
       }
@@ -177,9 +181,34 @@ export function setGridSize(size: number) {
   commit();
 }
 
+/** Change the song length. Shorter cuts the end off (undo brings it back); longer adds empty steps. */
+export function setSteps(steps: number) {
+  if (!(STEP_OPTIONS as readonly number[]).includes(steps) || steps === song.steps) return;
+  for (const track of song.tracks) {
+    const next = emptyMatrix(song.gridSize, steps);
+    const nextTies = emptyMatrix(song.gridSize, steps);
+    for (let r = 0; r < song.gridSize; r++) {
+      for (let c = 0; c < Math.min(steps, song.steps); c++) {
+        next[r][c] = track.matrix[r][c];
+        nextTies[r][c] = track.ties[r][c];
+      }
+    }
+    track.matrix = next;
+    track.ties = cleanTies(next, nextTies);
+  }
+  song.steps = steps;
+  ui.page = Math.min(ui.page, Math.max(0, Math.ceil(steps / pageSteps()) - 1));
+  commit();
+}
+
+/** Steps shown on one page of the grid */
+export function pageSteps() {
+  return Math.min(song.steps, ui.pageSize);
+}
+
 export function addTrack() {
   if (song.tracks.length >= MAX_TRACKS) return;
-  const track = createTrack(song.gridSize, `Synth ${song.tracks.length + 1}`);
+  const track = createTrack(song.gridSize, `Synth ${song.tracks.length + 1}`, {}, song.steps);
   song.tracks.push(track);
   song.activeTrack = song.tracks.length - 1;
   commit();
@@ -208,12 +237,12 @@ export function stepScale(direction: 1 | -1) {
 /** Shift every note of the active track up or down by one row */
 export function transpose(direction: 1 | -1) {
   const track = activeTrack();
-  const size = song.gridSize;
-  const next = emptyMatrix(size);
-  const nextTies = emptyMatrix(size);
-  for (let r = 0; r < size; r++) {
+  const rows = song.gridSize;
+  const next = emptyMatrix(rows, song.steps);
+  const nextTies = emptyMatrix(rows, song.steps);
+  for (let r = 0; r < rows; r++) {
     const nr = r - direction; // up = lower row index
-    if (nr < 0 || nr >= size) continue;
+    if (nr < 0 || nr >= rows) continue;
     next[nr] = [...track.matrix[r]];
     nextTies[nr] = [...track.ties[r]];
   }
@@ -224,16 +253,16 @@ export function transpose(direction: 1 | -1) {
 
 /** Fill the active track with a random melody using a random walk */
 export function generatePattern(density: number) {
-  const size = song.gridSize;
-  const matrix = emptyMatrix(size);
-  let row = Math.floor(size / 2);
-  for (let col = 0; col < size; col++) {
+  const rows = song.gridSize;
+  const matrix = emptyMatrix(rows, song.steps);
+  let row = Math.floor(rows / 2);
+  for (let col = 0; col < song.steps; col++) {
     if (Math.random() > density) continue;
-    row = Math.min(size - 1, Math.max(0, row + Math.round((Math.random() - 0.5) * Math.max(2, size / 4))));
+    row = Math.min(rows - 1, Math.max(0, row + Math.round((Math.random() - 0.5) * Math.max(2, rows / 4))));
     matrix[row][col] = true;
   }
   activeTrack().matrix = matrix;
-  activeTrack().ties = emptyMatrix(size);
+  activeTrack().ties = emptyMatrix(rows, song.steps);
   commit();
 }
 
@@ -396,7 +425,7 @@ export async function renderLoop() {
   try {
     await play();
     engine.startRecording();
-    const loop = (60 / song.tempo / 4) * song.gridSize;
+    const loop = (60 / song.tempo / 4) * song.steps;
     await new Promise((resolve) => setTimeout(resolve, (loop + 2.5) * 1000));
     stop();
     const wav = await engine.stopRecording();

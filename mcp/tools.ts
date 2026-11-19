@@ -5,7 +5,7 @@ import { deflateRawSync, inflateRawSync } from 'node:zlib';
 import { sanitizeSong, toCompact } from '../src/lib/storage';
 import { build, EXAMPLE_SONGS, type SongSpec } from '../src/lib/songs';
 import {
-  DEFAULT_EFFECTS, DEFAULT_SOUND, GRID_SIZES, PARAM_CHOICES, PARAM_RANGES, SOUND_PRESETS, createSong, type Song
+  DEFAULT_EFFECTS, DEFAULT_SOUND, GRID_SIZES, STEP_OPTIONS, PARAM_CHOICES, PARAM_RANGES, SOUND_PRESETS, createSong, type Song
 } from '../src/lib/types';
 
 export const APP_URL = 'https://drawaudio.zxce3.net/';
@@ -34,9 +34,9 @@ export async function loadSong(input: { song?: unknown; share_link?: string }): 
 export function songToSteps(song: Song) {
   return song.tracks.map((track) => {
     const bars: string[] = [];
-    for (let start = 0; start < song.gridSize; start += BAR) {
+    for (let start = 0; start < song.steps; start += BAR) {
       const tokens: string[] = [];
-      for (let col = start; col < Math.min(start + BAR, song.gridSize); col++) {
+      for (let col = start; col < Math.min(start + BAR, song.steps); col++) {
         const notes: string[] = [];
         for (let row = song.gridSize - 1; row >= 0; row--) {
           if (!track.matrix[row]?.[col]) continue;
@@ -52,13 +52,14 @@ export function songToSteps(song: Song) {
 }
 
 export function describeSong(song: Song) {
-  const beatsPerLoop = (song.gridSize / 4);
+  const beatsPerLoop = song.steps / 4;
   return {
     name: song.name,
     tempo: song.tempo,
     scale: song.scale,
-    gridSize: song.gridSize,
-    bars: song.gridSize / BAR,
+    pitchRows: song.gridSize,
+    lengthSteps: song.steps,
+    bars: song.steps / BAR,
     loopSeconds: Math.round((60 / song.tempo) * beatsPerLoop * 10) / 10,
     swing: song.swing,
     pattern: song.pattern,
@@ -92,7 +93,12 @@ export interface CreateInput {
   name: string;
   tempo?: number;
   scale?: string;
+  /** Legacy: sets pitch rows and steps to the same number (a square grid) */
   size?: 16 | 32 | 64;
+  /** Song length in bars (16 steps each): 1, 2, 4, 8, 16, 32 or 64 */
+  bars?: number;
+  /** Pitch rows: 8, 16, 32 or 64 (default 32, or `size` when given) */
+  rows?: number;
   swing?: number;
   effects?: Record<string, unknown>;
   tracks: TrackInput[];
@@ -103,10 +109,16 @@ export function createSongFromSpec(input: CreateInput): Song {
   for (const t of input.tracks) {
     if (t.sound && !(t.sound in SOUND_PRESETS)) throw new Error(`Unknown preset "${t.sound}". Use list_presets.`);
   }
+  const rows = input.rows ?? input.size ?? 32;
+  const steps = input.bars ? input.bars * 16 : (input.size ?? 16);
+  if (!(GRID_SIZES as readonly number[]).includes(rows)) throw new Error(`rows must be one of ${GRID_SIZES.join(', ')}`);
+  if (!(STEP_OPTIONS as readonly number[]).includes(steps)) throw new Error('bars must be 1, 2, 4, 8, 16, 32 or 64');
   const spec: SongSpec = {
     name: input.name,
     description: '',
-    size: input.size ?? 16,
+    size: rows as SongSpec['size'],
+    rows,
+    steps,
     tempo: input.tempo ?? 90,
     scale: input.scale ?? 'Pentatonic',
     swing: input.swing,
@@ -166,14 +178,14 @@ export function paramSchema() {
       ])
     );
   return {
-    song: { gridSizes: GRID_SIZES, tempo: [30, 240], beatsPerBar: [2, 7], swing: [0.25, 0.75], maxTracks: 8, patterns: ['forward', 'backward', 'bounce', 'columns', 'random'] },
+    song: { pitchRows: GRID_SIZES, lengthBars: [1, 2, 4, 8, 16, 32, 64], stepsPerBar: 16, tempo: [30, 240], beatsPerBar: [2, 7], swing: [0.25, 0.75], maxTracks: 8, patterns: ['forward', 'backward', 'bounce', 'columns', 'random'] },
     trackSound: describe(DEFAULT_SOUND),
     effects: describe(DEFAULT_EFFECTS),
     trackMixer: { volume: [0, 1], pan: [-1, 1], reverbSend: [0, 1] }
   };
 }
 
-export const listExamples = () => EXAMPLE_SONGS.map((e) => ({ id: e.id, name: e.name, gridSize: e.size, description: e.description }));
+export const listExamples = () => EXAMPLE_SONGS.map((e) => ({ id: e.id, name: e.name, gridSize: e.size, bars: e.size / 16, description: e.description }));
 export const getExample = (id: string) => {
   const example = EXAMPLE_SONGS.find((e) => e.id === id);
   if (!example) throw new Error(`Unknown example "${id}". Use list_examples.`);

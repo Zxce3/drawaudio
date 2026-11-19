@@ -227,3 +227,38 @@ test('MIDI: a held note exports as one long note and imports back with its lengt
   expect(heads(8)).toEqual([4]);
   expect(heads(9)).toEqual([1, 1]);
 });
+
+test('song length: old songs stay square, long songs keep every step through save, share and MIDI', () => {
+  // A song saved before song length existed has no `steps`: it is as long as it has rows
+  const legacy = toCompact(createSong()) as any;
+  delete legacy.steps;
+  expect(sanitizeSong(legacy).steps).toBe(16);
+
+  const song = createSong();
+  song.gridSize = 16;
+  song.steps = 128; // 8 bars
+  song.tracks = [createTrack(16, 'Long', {}, 128)];
+  const m = song.tracks[0].matrix;
+  expect(m[0].length).toBe(128);
+  m[4][100] = m[4][101] = m[4][102] = true;
+  song.tracks[0].ties[4][101] = song.tracks[0].ties[4][102] = true;
+  m[9][127] = true;
+
+  const copy = sanitizeSong(toCompact(song));
+  expect(copy.steps).toBe(128);
+  expect(copy.tracks[0].matrix[4].length).toBe(128);
+  expect(copy.tracks[0].matrix[4][100]).toBe(true);
+  expect(copy.tracks[0].matrix[9][127]).toBe(true);
+  expect(heldSteps(copy.tracks[0].ties, 4, 100)).toBe(3);
+
+  const back = midiToSong(parseMidi(exportMidi(song)), { ...createSong(), scale: song.scale, gridSize: 16 }, 'long.mid');
+  expect(back.steps).toBe(128);
+  expect(back.tracks[0].matrix.flat().filter(Boolean).length).toBe(4);
+  expect(heldSteps(back.tracks[0].ties, back.tracks[0].matrix.findIndex((row) => row[100]), 100)).toBe(3);
+});
+
+test('an invalid song length falls back safely', () => {
+  const bad = toCompact(createSong()) as any;
+  bad.steps = 99999;
+  expect(sanitizeSong(bad).steps).toBe(16);
+});

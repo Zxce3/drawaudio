@@ -4,6 +4,8 @@ export type PlaybackPattern = 'forward' | 'backward' | 'bounce' | 'columns' | 'r
 export type ImpulseType = 'reverb' | 'guitar' | 'drum';
 
 export const GRID_SIZES = [8, 16, 32, 64] as const;
+/** Song length in steps (sixteenth notes): 16 steps is one bar in 4/4. The grid shows one page of it at a time */
+export const STEP_OPTIONS = [8, 16, 32, 64, 128, 256, 512, 1024] as const;
 export const TIME_SIGNATURES = [2, 3, 4, 5, 6, 7] as const; // beats per bar, x/4
 
 export type ArpMode = 'off' | 'up' | 'down' | 'updown' | 'random' | 'pedal' | 'converge' | 'diverge';
@@ -144,7 +146,10 @@ export interface Effects {
 export interface Song {
   name: string;
   tempo: number;
+  /** Pitch rows: 8, 16, 32 or 64 */
   gridSize: number;
+  /** Length in steps (columns); songs saved before this existed are `gridSize` steps long */
+  steps: number;
   beatsPerBar: number;
   scale: string;
   pattern: PlaybackPattern;
@@ -238,8 +243,8 @@ export const DEFAULT_EFFECTS: Effects = {
   eqHigh: 0
 };
 
-export function emptyMatrix(size: number): boolean[][] {
-  return Array.from({ length: size }, () => Array<boolean>(size).fill(false));
+export function emptyMatrix(rows: number, cols = rows): boolean[][] {
+  return Array.from({ length: rows }, () => Array<boolean>(cols).fill(false));
 }
 
 /** Steps a note lasts: 1 plus the tied cells that follow its first cell */
@@ -260,12 +265,12 @@ export function newId(): string {
   return `t${Date.now().toString(36)}${idCounter}`;
 }
 
-export function createTrack(size: number, name: string, params: Partial<SoundParams> = {}): Track {
+export function createTrack(size: number, name: string, params: Partial<SoundParams> = {}, steps = size): Track {
   return {
     id: newId(),
     name,
-    matrix: emptyMatrix(size),
-    ties: emptyMatrix(size),
+    matrix: emptyMatrix(size, steps),
+    ties: emptyMatrix(size, steps),
     params: { ...DEFAULT_SOUND, ...params },
     volume: 0.8,
     pan: 0,
@@ -280,6 +285,7 @@ export function createSong(): Song {
     name: 'Untitled',
     tempo: 80,
     gridSize: 16,
+    steps: 16,
     beatsPerBar: 4,
     scale: 'Pentatonic',
     pattern: 'forward',

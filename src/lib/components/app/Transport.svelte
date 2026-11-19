@@ -9,12 +9,14 @@
   import HelpTip from './HelpTip.svelte';
   import { pwa, install } from '$lib/pwa.svelte';
   import {
-    song, ui, clearTrack, commit, undo, redo, togglePlay, toggleRecording, setGridSize, stepScale, tapTempo, scaleNames, getEngine, cycleSkin
+    song, ui, clearTrack, commit, undo, redo, togglePlay, toggleRecording, setGridSize, stepScale, tapTempo, scaleNames, getEngine, cycleSkin, setSteps
   } from '$lib/song.svelte';
   import { scaleLabel } from '$lib/scales';
-  import { GRID_SIZES, TIME_SIGNATURES } from '$lib/types';
+  import { GRID_SIZES, STEP_OPTIONS, TIME_SIGNATURES } from '$lib/types';
 
-  const sizeOptions = GRID_SIZES.map((s) => ({ value: String(s), label: `${s}×${s}` }));
+  const sizeOptions = GRID_SIZES.map((s) => ({ value: String(s), label: `${s} rows` }));
+  const barText = (steps: number) => (steps < 16 ? '½ bar' : steps === 16 ? '1 bar' : `${steps / 16} bars`);
+  const lengthOptions = STEP_OPTIONS.map((s) => ({ value: String(s), label: barText(s) }));
   const sigOptions = TIME_SIGNATURES.map((n) => ({ value: String(n), label: `${n}/4` }));
   const scaleOptions = scaleNames.map((n) => ({ value: n, label: scaleLabel(n) }));
 
@@ -25,7 +27,7 @@
   });
   const fmt = (t: number) => `${Math.floor(t / 60)}:${(t % 60).toFixed(1).padStart(4, '0')}`;
   // Length of one pass through the grid: a step is a sixteenth note
-  const loopLength = $derived(fmt((60 / song.tempo / 4) * song.gridSize));
+  const loopLength = $derived(fmt((60 / song.tempo / 4) * song.steps));
   const time = $derived(`${Math.floor(ui.elapsed / 60)}:${(ui.elapsed % 60).toFixed(1).padStart(4, '0')}`);
 
   let level = $state(0);
@@ -79,7 +81,8 @@
   <Separator orientation="vertical" class="hidden h-6 lg:block" />
 
   <div class="flex items-center gap-2" data-guide="gridsize">
-    <Choice label="Grid size" class="w-24" value={String(song.gridSize)} options={sizeOptions} onchange={(v) => setGridSize(Number(v))} />
+    <Choice label="Pitch rows" class="w-24" value={String(song.gridSize)} options={sizeOptions} onchange={(v) => setGridSize(Number(v))} />
+    <Choice label="Song length" class="w-24" value={String(song.steps)} options={lengthOptions} onchange={(v) => setSteps(Number(v))} />
     <Choice label="Time signature" class="w-20" value={String(song.beatsPerBar)} options={sigOptions} onchange={(v) => { song.beatsPerBar = Number(v); commit(); }} />
     <HelpTip id="bar/gridSize" label="Grid size" />
   </div>

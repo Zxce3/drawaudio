@@ -74,3 +74,17 @@ function heldStepsOf(t: { ties: boolean[][] }, r: number, c: number) {
   while (t.ties[r][c + n]) n++;
   return n;
 }
+
+test('create_song with bars makes a multi-page song and describe_song reports it', () => {
+  const eight = Array.from({ length: 8 }, (_, i) => (i % 2 ? 'E4 . . . G4 . . .' : 'C4 . . . E4 . . .'));
+  const song = createSongFromSpec({ name: 'Long', bars: 8, rows: 32, tracks: [{ name: 'Lead', steps: eight }] });
+  expect(song.steps).toBe(128);
+  expect(song.gridSize).toBe(32);
+  const d = describeSong(song);
+  expect(d.bars).toBe(8);
+  expect(d.lengthSteps).toBe(128);
+  expect(d.steps[0].steps.length).toBe(8);
+  expect(() => createSongFromSpec({ name: 'x', bars: 3 as any, tracks: [{ name: 'a', steps: '.' }] })).toThrow();
+  // legacy `size` still means a square grid
+  expect(createSongFromSpec({ ...spec, size: 32 }).steps).toBe(32);
+});

@@ -2,6 +2,7 @@ import {
   DEFAULT_EFFECTS,
   DEFAULT_SOUND,
   GRID_SIZES,
+  STEP_OPTIONS,
   PARAM_CHOICES,
   cleanTies,
   PARAM_RANGES,
@@ -19,12 +20,13 @@ const MAX_TRACKS = 8;
 // ---------------------------------------------------------- matrix packing
 
 export function packMatrix(matrix: boolean[][]): string {
-  const size = matrix.length;
-  const bytes = new Uint8Array(Math.ceil((size * size) / 8));
-  for (let r = 0; r < size; r++) {
-    for (let c = 0; c < size; c++) {
+  const rows = matrix.length;
+  const cols = matrix[0]?.length ?? 0;
+  const bytes = new Uint8Array(Math.ceil((rows * cols) / 8));
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
       if (matrix[r]?.[c]) {
-        const bit = r * size + c;
+        const bit = r * cols + c;
         bytes[bit >> 3] |= 1 << (bit & 7);
       }
     }
@@ -32,12 +34,12 @@ export function packMatrix(matrix: boolean[][]): string {
   return bytesToBase64(bytes);
 }
 
-export function unpackMatrix(packed: string, size: number): boolean[][] {
-  const matrix = emptyMatrix(size);
+export function unpackMatrix(packed: string, rows: number, cols = rows): boolean[][] {
+  const matrix = emptyMatrix(rows, cols);
   const bytes = base64ToBytes(packed);
-  for (let r = 0; r < size; r++) {
-    for (let c = 0; c < size; c++) {
-      const bit = r * size + c;
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const bit = r * cols + c;
       matrix[r][c] = ((bytes[bit >> 3] ?? 0) >> (bit & 7)) % 2 === 1;
     }
   }
@@ -101,16 +103,18 @@ export function sanitizeSong(raw: unknown): Song {
   const r = raw as Record<string, any>;
 
   const gridSize = GRID_SIZES.includes(r.gridSize) ? (r.gridSize as number) : base.gridSize;
+  // Songs from before song length existed are as many steps long as they have rows
+  const steps = (STEP_OPTIONS as readonly number[]).includes(r.steps) ? (r.steps as number) : gridSize;
   const rawTracks: unknown[] = Array.isArray(r.tracks) ? r.tracks.slice(0, MAX_TRACKS) : [];
   const tracks: Track[] = rawTracks.map((item, i) => {
     const t = (item ?? {}) as Record<string, any>;
     const p = (t.params ?? {}) as Record<string, any>;
-    const matrix = typeof t.matrix === 'string' ? unpackMatrix(t.matrix, gridSize) : emptyMatrix(gridSize);
+    const matrix = typeof t.matrix === 'string' ? unpackMatrix(t.matrix, gridSize, steps) : emptyMatrix(gridSize, steps);
     return {
       id: newId(),
       name: typeof t.name === 'string' ? t.name.slice(0, 40) : `Synth ${i + 1}`,
       matrix,
-      ties: cleanTies(matrix, typeof t.ties === 'string' ? unpackMatrix(t.ties, gridSize) : emptyMatrix(gridSize)),
+      ties: cleanTies(matrix, typeof t.ties === 'string' ? unpackMatrix(t.ties, gridSize, steps) : emptyMatrix(gridSize, steps)),
       params: mergeSettings(DEFAULT_SOUND, p),
       volume: num(t.volume, 0.8, 0, 1),
       pan: num(t.pan, 0, -1, 1),
@@ -119,13 +123,14 @@ export function sanitizeSong(raw: unknown): Song {
       solo: t.solo === true
     };
   });
-  if (!tracks.length) return { ...base, gridSize, tracks: [{ ...base.tracks[0], matrix: emptyMatrix(gridSize) }] };
+  if (!tracks.length) return { ...base, gridSize, steps, tracks: [{ ...base.tracks[0], matrix: emptyMatrix(gridSize, steps), ties: emptyMatrix(gridSize, steps) }] };
 
   const e = (r.effects ?? {}) as Record<string, any>;
   return {
     name: typeof r.name === 'string' ? r.name.slice(0, 60) : base.name,
     tempo: Math.round(num(r.tempo, base.tempo, 30, 240)),
     gridSize,
+    steps,
     beatsPerBar: Math.round(num(r.beatsPerBar, 4, 2, 7)),
     scale: typeof r.scale === 'string' && r.scale in SCALES ? r.scale : base.scale,
     pattern: pick(r.pattern, ['forward', 'backward', 'bounce', 'columns', 'random'] as const, 'forward'),

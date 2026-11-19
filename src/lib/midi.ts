@@ -1,5 +1,5 @@
 import { findRowForMidi, getRowPitch } from './scales';
-import { GRID_SIZES, createTrack, emptyMatrix, heldSteps, type Song } from './types';
+import { STEP_OPTIONS, createTrack, heldSteps, type Song } from './types';
 
 const PPQ = 480;
 const STEP_TICKS = PPQ / 4; // one grid column = a sixteenth note
@@ -40,7 +40,7 @@ export function exportMidi(song: Song): Uint8Array {
     for (let row = 0; row < song.gridSize; row++) {
       const midi = getRowPitch(song.scale, song.gridSize, row).midi;
       let col = 0;
-      while (col < song.gridSize) {
+      while (col < song.steps) {
         if (!track.matrix[row]?.[col]) {
           col++;
           continue;
@@ -180,26 +180,27 @@ export function parseMidi(bytes: Uint8Array): ParsedMidi {
 export function midiToSong(parsed: ParsedMidi, base: Song, fileName = 'Imported'): Song {
   const stepTicks = parsed.ppq / 4;
   const tracks = parsed.tracks.slice(0, 8);
-  const lastCol = Math.max(0, ...tracks.flatMap((t) => t.notes.map((n) => Math.round(n.tick / stepTicks))));
-  const gridSize = GRID_SIZES.find((s) => s > lastCol) ?? GRID_SIZES[GRID_SIZES.length - 1];
+  const lastCol = Math.max(0, ...tracks.flatMap((t) => t.notes.map((n) => Math.round(n.tick / stepTicks) + Math.max(1, Math.round(n.duration / stepTicks)) - 1)));
+  // Keep the song's pitch range; the length grows to fit the last note (up to the longest supported song)
+  const rows = base.gridSize;
+  const steps = STEP_OPTIONS.find((s) => s > lastCol && s >= 16) ?? STEP_OPTIONS[STEP_OPTIONS.length - 1];
 
   const song: Song = {
     ...base,
     name: fileName.replace(/\.midi?$/i, '') || 'Imported',
     tempo: Math.min(240, Math.max(30, parsed.tempo)),
     beatsPerBar: parsed.beatsPerBar && parsed.beatsPerBar >= 2 && parsed.beatsPerBar <= 7 ? parsed.beatsPerBar : base.beatsPerBar,
-    gridSize,
+    gridSize: rows,
+    steps,
     activeTrack: 0,
     tracks: tracks.map((source, i) => {
-      const track = createTrack(gridSize, source.name || `Synth ${i + 1}`);
-      track.matrix = emptyMatrix(gridSize);
-      track.ties = emptyMatrix(gridSize);
+      const track = createTrack(rows, source.name || `Synth ${i + 1}`, {}, steps);
       for (const note of source.notes) {
         const col = Math.round(note.tick / stepTicks);
-        if (col >= gridSize) continue;
-        const row = findRowForMidi(base.scale, gridSize, note.midi);
+        if (col >= steps) continue;
+        const row = findRowForMidi(base.scale, rows, note.midi);
         const length = Math.max(1, Math.round(note.duration / stepTicks));
-        for (let c = col; c < Math.min(gridSize, col + length); c++) {
+        for (let c = col; c < Math.min(steps, col + length); c++) {
           track.matrix[row][c] = true;
           if (c > col) track.ties[row][c] = true;
         }

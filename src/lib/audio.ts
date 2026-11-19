@@ -655,7 +655,7 @@ export class AudioEngine {
     await ctx.resume();
     this.stop();
     this.playing = true;
-    this.nextStep = this.song.pattern === 'backward' ? this.song.gridSize - 1 : 0;
+    this.nextStep = this.song.pattern === 'backward' ? this.song.steps - 1 : 0;
     this.reverse = false;
     this.schedSteps = 0;
     this.nextTime = ctx.currentTime + 0.06;
@@ -710,7 +710,7 @@ export class AudioEngine {
   };
 
   private advance(step: number): number {
-    const size = this.song.gridSize;
+    const size = this.song.steps;
     switch (this.song.pattern) {
       case 'backward':
         return (step - 1 + size) % size;

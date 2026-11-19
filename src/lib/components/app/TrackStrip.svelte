@@ -18,7 +18,7 @@
   {#each song.tracks as track, i (track.id)}
     <div class="bg-card flex w-72 shrink-0 gap-3 rounded-lg border p-3 {i === song.activeTrack ? 'border-primary ring-primary/30 ring-2' : ''}">
       <button class="self-start rounded-md" onclick={() => (song.activeTrack = i)} aria-label="Select {track.name}" aria-pressed={i === song.activeTrack}>
-        <TrackThumb {track} size={song.gridSize} />
+        <TrackThumb {track} rows={song.gridSize} steps={song.steps} />
       </button>
       <div class="min-w-0 flex-1 space-y-2">
         <div class="flex items-center gap-1">
